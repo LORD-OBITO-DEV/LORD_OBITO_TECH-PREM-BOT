@@ -8,6 +8,7 @@ const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
+// === fichiers JSON ===
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
 
@@ -29,11 +30,46 @@ function getExpirationDate() {
 // === Commandes utilisateurs ===
 
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, `👋 Bienvenue ${msg.from.first_name} !\n\nUtilise la commande /abonnement pour voir les moyens de paiement.`);
+  const menu = `
+╔════════════════════
+║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
+╠════════════════════
+║ ✞︎ /abonnement — Voir les moyens de paiement
+║ ✞︎ /status — Vérifier ton abonnement
+║ ✞︎ /promo — Gagne 1 mois gratuit
+╚════════════════════════
+
+© BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
+`;
+  bot.sendMessage(msg.chat.id, menu);
 });
 
 bot.onText(/\/abonnement/, (msg) => {
-  bot.sendMessage(msg.chat.id, `💳 *Abonnement*\n\nTu peux payer via :\n\n🔵 /paypal\n🌊 /wave\n🟠 /om\n💛 /mtn\n\nClique ensuite sur /acces pour demander l’accès.`, { parse_mode: "Markdown" });
+  const chatId = msg.chat.id;
+  const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
+
+  const message = `
+╔════════════════════
+║—͟͟͞͞➸⃝ABONNEMENT⍣⃝💳
+╠════════════════════
+║ 💰 Montant : 2000 FCFA (~$3.30)
+║ 
+║ 📎 Moyens de paiement :
+║ • PayPal : /paypal
+║ • Wave : /wave 🌊
+║ • Orange Money : /om
+║ • MTN Money : /mtn
+╚════════════════════════
+
+Clique sur /acces après paiement 💼
+
+© BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
+`;
+
+  bot.sendPhoto(chatId, imageURL, {
+    caption: message,
+    parse_mode: "Markdown"
+  });
 });
 
 bot.onText(/\/paypal/, (msg) => {
@@ -141,7 +177,7 @@ bot.onText(/\/promo/, (msg) => {
   });
 });
 
-// Nettoyage des expirés
+// Nettoyage auto des expirés
 setInterval(() => {
   const now = new Date();
   let changed = false;
