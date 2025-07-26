@@ -9,6 +9,10 @@ const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
+function isAdmin(userId) {
+  return String(userId) === String(config.ADMIN_ID);
+}
+
 // === Fichiers JSON ===
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
