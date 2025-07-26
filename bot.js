@@ -4,19 +4,23 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
 const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 
 const app = express();
 app.use(express.json());
 
+// Fichiers pour sauvegarde
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
 const referralsPath = './referrals.json';
 
+// Charger données ou initialiser
 let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(subscribersPath)) : {};
 let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
 let referrals = fs.existsSync(referralsPath) ? JSON.parse(fs.readFileSync(referralsPath)) : {};
 
+// Fonctions sauvegarde
 function saveSubscribers() {
   fs.writeFileSync(subscribersPath, JSON.stringify(subscribers, null, 2));
 }
@@ -26,11 +30,13 @@ function savePending() {
 function saveReferrals() {
   fs.writeFileSync(referralsPath, JSON.stringify(referrals, null, 2));
 }
+
 function getExpirationDate(days = 30) {
   const now = new Date();
   now.setDate(now.getDate() + days);
   return now.toISOString();
 }
+
 function generateReferralCode() {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
@@ -228,7 +234,7 @@ bot.onText(/\/status/, (msg) => {
   }
 });
 
-// === Auto-clean abonnés expirés chaque heure ===
+// === Nettoyage auto des abonnés expirés toutes les heures ===
 setInterval(() => {
   const now = new Date();
   let changed = false;
@@ -241,7 +247,7 @@ setInterval(() => {
   if (changed) saveSubscribers();
 }, 3600000);
 
-// === Webhook config ===
+// === Configuration webhook ===
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
 
