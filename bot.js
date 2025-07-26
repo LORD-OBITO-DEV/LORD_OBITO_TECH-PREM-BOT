@@ -36,6 +36,40 @@ function getExpirationDate(days = 30) {
 function generateReferralCode() {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
+// === Utilitaires ===
+function isAdmin(userId) {
+  return String(userId) === String(config.ADMIN_ID);
+}
+function isSubscribed(userId) {
+  if (isAdmin(userId)) return true; // Admin a accès illimité
+  if (!subscribers[userId]) return false;
+  return new Date(subscribers[userId].expires) > new Date();
+}
+
+// === Filtrage général des commandes cachées (exemple) ===
+const hiddenCommands = [
+  '/valider',
+  '/rejeter',
+  '/abonnés',
+  // autres commandes admin/cachées si besoin
+];
+
+// Vérifie si un message est une commande cachée
+function isHiddenCommand(text) {
+  if (!text) return false;
+  return hiddenCommands.some(cmd => text.startsWith(cmd));
+}
+
+// Middleware bot pour filtrer commandes cachées
+bot.on('message', (msg) => {
+  const text = msg.text;
+  const userId = msg.from.id;
+
+  if (isHiddenCommand(text) && !isSubscribed(userId)) {
+    bot.sendMessage(msg.chat.id, '⛔ Cette commande est réservée aux abonnés premium ou à l’administrateur.');
+    return;
+  }
+});
 
 // === Commande /start avec parrainage ===
 bot.onText(/\/start(?: (.+))?/, (msg, match) => {
@@ -107,8 +141,9 @@ bot.onText(/\/help/, (msg) => {
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
 /valider <id> — (admin) Valider un paiement
-/preuve <texte> — Envoyer une preuve de paiement
 /rejeter <id> <raison> — (admin) Rejeter une demande d'accès
+/abonnés — (admin) Liste tous les abonnés
+/preuve <texte> — Envoyer une preuve de paiement
 `;
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
@@ -216,7 +251,7 @@ bot.onText(/\/acces/, (msg) => {
   const userId = msg.from.id;
   const chatId = msg.chat.id;
 
-  if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
+  if (isSubscribed(userId)) {
     return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
@@ -225,7 +260,7 @@ bot.onText(/\/acces/, (msg) => {
 
 // === /valider ===
 bot.onText(/\/valider (\d+)/, (msg, match) => {
-  if (String(msg.from.id) !== String(config.ADMIN_ID)) {
+  if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
 
@@ -255,7 +290,7 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
 
 // === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
-  if (String(msg.from.id) !== String(config.ADMIN_ID)) {
+  if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
 
@@ -280,6 +315,23 @@ bot.onText(/\/status/, (msg) => {
   } else {
     return bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
   }
+});
+
+// === /abonnés (admin) ===
+bot.onText(/\/abonnés/, (msg) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
+  }
+
+  if (Object.keys(subscribers).length === 0) {
+    return bot.sendMessage(msg.chat.id, 'ℹ️ Aucun abonné pour le moment.');
+  }
+
+  let list = '📋 *Liste des abonnés :*\n\n';
+  for (const [userId, data] of Object.entries(subscribers)) {
+    list += `• @${data.username || 'Inconnu'} (ID: ${userId}) — expire le ${new Date(data.expires).toLocaleString()}\n`;
+  }
+  bot.sendMessage(msg.chat.id, list, { parse_mode: 'Markdown' });
 });
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
