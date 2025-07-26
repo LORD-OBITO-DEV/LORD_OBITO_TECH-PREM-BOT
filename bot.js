@@ -3,7 +3,7 @@ import express from 'express';
 import fs from 'fs';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-const bot = new TelegramBot(config.BOT_TOKEN, { webHook: { port: process.env.PORT || 3000 } });
+const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 
 const app = express();
 app.use(express.json());
@@ -75,8 +75,10 @@ bot.onText(/\/acces/, (msg) => {
   }
 });
 
-bot.onText(/\/valider (\\d+)/, (msg, match) => {
-  if (String(msg.from.id) !== String(config.ADMIN_ID)) return bot.sendMessage(msg.chat.id, '⛔ Réservé à l’admin');
+bot.onText(/\/valider (\d+)/, (msg, match) => {
+  if (String(msg.from.id) !== String(config.ADMIN_ID)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Réservé à l’admin');
+  }
 
   const userId = match[1];
   const request = pending[userId];
@@ -107,8 +109,10 @@ setInterval(() => {
   if (changed) saveSubscribers();
 }, 3600000);
 
-// === Démarrage Express + Webhook ===
+// === Webhook Express ===
+const PORT = process.env.PORT || 3000;
 const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
+
 bot.setWebHook(`${HOST}/bot${config.BOT_TOKEN}`);
 
 app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
@@ -116,6 +120,6 @@ app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
   res.sendStatus(200);
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log('🚀 Bot Webhook en écoute !');
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Bot Webhook en écoute sur le port ${PORT}`);
 });
