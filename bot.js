@@ -213,4 +213,45 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
   delete pending[userId];
   savePending();
 
-  bot.sendMessage(request.chatId, `✅ Paiement confirmé
+  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
+  bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
+});
+
+// === /status ===
+bot.onText(/\/status/, (msg) => {
+  const userId = msg.from.id;
+  const sub = subscribers[userId];
+  if (sub && new Date(sub.expires) > new Date()) {
+    return bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
+  } else {
+    return bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
+  }
+});
+
+// === Auto-clean abonnés expirés chaque heure ===
+setInterval(() => {
+  const now = new Date();
+  let changed = false;
+  for (const userId in subscribers) {
+    if (new Date(subscribers[userId].expires) < now) {
+      delete subscribers[userId];
+      changed = true;
+    }
+  }
+  if (changed) saveSubscribers();
+}, 3600000);
+
+// === Webhook config ===
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
+
+bot.setWebHook(`${HOST}/bot${config.BOT_TOKEN}`);
+
+app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Bot Webhook actif sur le port ${PORT}`);
+});
