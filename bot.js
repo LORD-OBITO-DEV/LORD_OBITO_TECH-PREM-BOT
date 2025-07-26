@@ -97,6 +97,33 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
   bot.sendMessage(msg.chat.id, `✅ Utilisateur @${request.username} validé jusqu'au ${expDate}.`);
 });
 
+// Commande /wave
+bot.onText(/\/wave/, (msg) => {
+  const chatId = msg.chat.id;
+
+  const message = `🌊 Paiement par Wave\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nAprès paiement, clique sur le bouton ci-dessous pour demander l'accès.`;
+
+  bot.sendMessage(chatId, message, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ J’ai payé", callback_data: "demander_acces" }]
+      ]
+    }
+  });
+});
+
+// Gérer le bouton "J’ai payé" (Wave)
+bot.on("callback_query", async (query) => {
+  const chatId = query.message.chat.id;
+
+  if (query.data === "demander_acces") {
+    await bot.sendMessage(chatId, `🔄 Redirection vers la commande /acces...`);
+    bot.emit('text', { text: "/acces", chat: { id: chatId }, from: query.from });
+  }
+
+  bot.answerCallbackQuery(query.id);
+});
+
 // Auto-clean des abonnés expirés
 setInterval(async () => {
   const now = new Date();
