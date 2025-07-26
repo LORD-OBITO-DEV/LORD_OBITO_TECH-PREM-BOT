@@ -30,6 +30,7 @@ function getExpirationDate() {
 // === Commandes utilisateurs ===
 
 bot.onText(/\/start/, (msg) => {
+  const image = 'https://files.catbox.moe/dsmhrq.jpg';
   const menu = `
 ╔════════════════════
 ║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
@@ -41,13 +42,15 @@ bot.onText(/\/start/, (msg) => {
 
 © BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
 `;
-  bot.sendMessage(msg.chat.id, menu);
+
+  bot.sendPhoto(msg.chat.id, image, {
+    caption: menu,
+    parse_mode: "Markdown"
+  });
 });
 
 bot.onText(/\/abonnement/, (msg) => {
-  const chatId = msg.chat.id;
   const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
-
   const message = `
 ╔════════════════════
 ║—͟͟͞͞➸⃝ABONNEMENT⍣⃝💳
@@ -64,21 +67,17 @@ bot.onText(/\/abonnement/, (msg) => {
 Clique sur /acces après paiement 💼
 
 © BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
-`;
-
-  bot.sendPhoto(chatId, imageURL, {
-    caption: message,
-    parse_mode: "Markdown"
-  });
+  `;
+  bot.sendPhoto(msg.chat.id, imageURL, { caption: message, parse_mode: "Markdown" });
 });
 
 bot.onText(/\/paypal/, (msg) => {
-  const text = `🔵 *Paiement par PayPal*\n\nLien :\n👉 ${config.PAYPAL_LINK}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ensuite sur /acces pour valider.`;
+  const text = `🔵 *Paiement par PayPal*\n\n👉 ${config.PAYPAL_LINK}\n💵 Montant : 2000 FCFA (~$3.30)\n\n✅ Clique ensuite sur /acces pour valider.`;
   bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/GPiFxEz.png', { caption: text, parse_mode: "Markdown" });
 });
 
 bot.onText(/\/wave/, (msg) => {
-  const message = `🌊 *Paiement par Wave*\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ci-dessous quand c’est fait.`;
+  const message = `🌊 *Paiement par Wave*\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)`;
   bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/MZEKPVP.jpeg', {
     caption: message,
     parse_mode: "Markdown",
@@ -126,11 +125,7 @@ bot.onText(/\/acces/, (msg) => {
     return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
-  pending[userId] = {
-    username,
-    chatId,
-    requestedAt: new Date().toISOString(),
-  };
+  pending[userId] = { username, chatId, requestedAt: new Date().toISOString() };
   savePending();
 
   bot.sendMessage(chatId, `📬 Demande envoyée. L'admin validera après vérification.`);
@@ -177,7 +172,7 @@ bot.onText(/\/promo/, (msg) => {
   });
 });
 
-// Nettoyage auto des expirés
+// Nettoyage des expirés
 setInterval(() => {
   const now = new Date();
   let changed = false;
