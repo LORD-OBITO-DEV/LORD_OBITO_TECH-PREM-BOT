@@ -8,7 +8,6 @@ const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-// === fichiers JSON ===
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
 
@@ -27,20 +26,50 @@ function getExpirationDate() {
   return now.toISOString();
 }
 
-// === commandes Telegram ===
+// === Commandes utilisateurs ===
+
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, `👋 Bienvenue ${msg.from.first_name} !\n\nUtilise /abonnement pour t'abonner.`);
+  bot.sendMessage(msg.chat.id, `👋 Bienvenue ${msg.from.first_name} !\n\nUtilise la commande /abonnement pour voir les moyens de paiement.`);
 });
 
 bot.onText(/\/abonnement/, (msg) => {
-  bot.sendMessage(msg.chat.id, `💳 Pour t'abonner, envoie 2000 FCFA (~$3.30) via PayPal :\n👉 ${config.PAYPAL_LINK}\n\nOu utilise /wave pour payer via Wave.\n\nClique sur /acces après paiement.`);
+  bot.sendMessage(msg.chat.id, `💳 *Abonnement*\n\nTu peux payer via :\n\n🔵 /paypal\n🌊 /wave\n🟠 /om\n💛 /mtn\n\nClique ensuite sur /acces pour demander l’accès.`, { parse_mode: "Markdown" });
+});
+
+bot.onText(/\/paypal/, (msg) => {
+  const text = `🔵 *Paiement par PayPal*\n\nLien :\n👉 ${config.PAYPAL_LINK}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ensuite sur /acces pour valider.`;
+  bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/GPiFxEz.png', { caption: text, parse_mode: "Markdown" });
 });
 
 bot.onText(/\/wave/, (msg) => {
-  const message = `🌊 Paiement par Wave\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ci-dessous quand c’est fait.`;
-  bot.sendMessage(msg.chat.id, message, {
+  const message = `🌊 *Paiement par Wave*\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ci-dessous quand c’est fait.`;
+  bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/MZEKPVP.jpeg', {
+    caption: message,
+    parse_mode: "Markdown",
     reply_markup: {
-      inline_keyboard: [[{ text: "✅ J’ai payé", callback_data: "demander_acces" }]]
+      inline_keyboard: [[{ text: "✅ J’ai payé (Wave)", callback_data: "demander_acces" }]]
+    }
+  });
+});
+
+bot.onText(/\/om/, (msg) => {
+  const message = `🟠 *Paiement par Orange Money*\n\n📱 Numéro : ${config.OM_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)`;
+  bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/zQjVl38.jpeg', {
+    caption: message,
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [[{ text: "✅ J’ai payé (OM)", callback_data: "demander_acces" }]]
+    }
+  });
+});
+
+bot.onText(/\/mtn/, (msg) => {
+  const message = `💛 *Paiement par MTN Money*\n\n📱 Numéro : ${config.MTN_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)`;
+  bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/bcs0ZtF.jpeg', {
+    caption: message,
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [[{ text: "✅ J’ai payé (MTN)", callback_data: "demander_acces" }]]
     }
   });
 });
@@ -95,7 +124,24 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
   bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
 });
 
-// Nettoyage auto des expirés
+bot.onText(/\/status/, (msg) => {
+  const userId = msg.from.id;
+  const sub = subscribers[userId];
+  if (sub) {
+    bot.sendMessage(msg.chat.id, `📆 Ton abonnement expire le : *${new Date(sub.expires).toLocaleDateString()}*`, { parse_mode: "Markdown" });
+  } else {
+    bot.sendMessage(msg.chat.id, `❌ Tu n'es pas encore abonné.`);
+  }
+});
+
+bot.onText(/\/promo/, (msg) => {
+  bot.sendPhoto(msg.chat.id, 'https://i.imgur.com/7zwp4mc.jpeg', {
+    caption: `🎁 *Promo Parrainage !*\n\nInvite tes amis et gagne 1 mois gratuit !\nEnvoie ce lien : https://t.me/${config.BOT_USERNAME}\n\nPlus d’amis = plus de bonus 🎉`,
+    parse_mode: "Markdown"
+  });
+});
+
+// Nettoyage des expirés
 setInterval(() => {
   const now = new Date();
   let changed = false;
@@ -109,7 +155,7 @@ setInterval(() => {
   if (changed) saveSubscribers();
 }, 3600000);
 
-// === Webhook Express ===
+// Webhook Express
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
 
