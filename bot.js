@@ -1,7 +1,8 @@
 // bot.js
 import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
-import config from './config.json' assert { type: 'json' };
+
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
 const bot = new TelegramBot(config.BOT_TOKEN, { polling: true });
 const subscribersPath = './subscribers.json';
