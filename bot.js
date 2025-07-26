@@ -106,9 +106,15 @@ bot.onText(/\/help/, (msg) => {
 /codepromo — Voir ton code promo
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
-/valider <id> — (admin) Valider un paiement
 /preuve <texte> — Envoyer une preuve de paiement
-/rejeter <id> <raison> — (admin) Rejeter une demande d'accès
+/acces — Vérifie ton accès après paiement
+
+👑 *Commandes Admin* :
+/valider <id> — Valider un paiement
+/rejeter <id> <raison> — Rejeter une demande d'accès
+/prem <id> — Donner un abonnement premium
+/unprem <id> — Supprimer un abonnement premium
+/abonnes — Liste des abonnés
 `;
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
@@ -269,6 +275,39 @@ bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
 
   bot.sendMessage(request.chatId, `❌ Ta demande d'accès a été rejetée.\nRaison : ${reason}`);
   bot.sendMessage(msg.chat.id, `✅ Demande de @${request.username} (ID: ${userId}) rejetée.\nRaison : ${reason}`);
+});
+
+bot.onText(/\/prem (\d+)/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
+  }
+
+  const userId = match[1];
+  const username = referrals[userId]?.username || `ID:${userId}`;
+
+  const exp = getExpirationDate(30); // 30 jours par défaut
+  subscribers[userId] = { username, expires: exp };
+  saveSubscribers();
+
+  bot.sendMessage(userId, `🎉 Ton abonnement premium a été activé manuellement par l'admin !`);
+  bot.sendMessage(msg.chat.id, `✅ Premium accordé à ${username}`);
+});
+
+bot.onText(/\/unprem (\d+)/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
+  }
+
+  const userId = match[1];
+  if (!subscribers[userId]) {
+    return bot.sendMessage(msg.chat.id, `ℹ️ Cet utilisateur n’a pas d’abonnement actif.`);
+  }
+
+  delete subscribers[userId];
+  saveSubscribers();
+
+  bot.sendMessage(userId, `⚠️ Ton abonnement premium a été révoqué par l’admin.`);
+  bot.sendMessage(msg.chat.id, `✅ Abonnement de l'utilisateur ${userId} révoqué.`);
 });
 
 // === /status ===
