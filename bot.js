@@ -52,12 +52,29 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
         parrainData.filleuls.push(String(userId));
         referrals[parrainId] = parrainData;
         saveReferrals();
+
+        // Bonus 1 mois si 3 filleuls atteints
+        if (parrainData.filleuls.length === 3) {
+          let exp = new Date();
+          if (subscribers[parrainId] && new Date(subscribers[parrainId].expires) > new Date()) {
+            exp = new Date(subscribers[parrainId].expires);
+          }
+          exp.setDate(exp.getDate() + 30);
+          subscribers[parrainId] = {
+            username: parrainData.username || `ID:${parrainId}`,
+            expires: exp.toISOString()
+          };
+          saveSubscribers();
+
+          bot.sendMessage(parrainId, `🔥 Bravo ! Tu as 3 filleuls. Ton abonnement premium est prolongé de 1 mois automatiquement !`);
+        }
       }
     }
   }
 
   if (!referrals[userId]) {
     referrals[userId] = { code: generateReferralCode(), filleuls: [] };
+    referrals[userId].username = msg.from.username || `ID:${userId}`;
     saveReferrals();
   }
 
@@ -90,6 +107,8 @@ bot.onText(/\/help/, (msg) => {
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
 /valider <id> — (admin) Valider un paiement
+/preuve <texte> — Envoyer une preuve de paiement
+/rejeter <id> <raison> — (admin) Rejeter une demande d'accès
 `;
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
@@ -100,19 +119,21 @@ bot.onText(/\/codepromo/, (msg) => {
   const userId = msg.from.id;
   if (!referrals[userId]) {
     referrals[userId] = { code: generateReferralCode(), filleuls: [] };
+    referrals[userId].username = msg.from.username || `ID:${userId}`;
     saveReferrals();
   }
   const code = referrals[userId].code;
   bot.sendMessage(msg.chat.id, `🎫 Ton code promo : *${code}*\nPartage-le avec /start ${code}`, { parse_mode: "Markdown" });
 });
 
-// === /promo (génère un lien start) ===
+// === /promo ===
 bot.onText(/\/promo/, (msg) => {
   const userId = msg.from.id;
   const username = msg.from.username || null;
 
   if (!referrals[userId]) {
     referrals[userId] = { code: generateReferralCode(), filleuls: [] };
+    referrals[userId].username = msg.from.username || `ID:${userId}`;
     saveReferrals();
   }
 
@@ -136,7 +157,7 @@ bot.onText(/\/mesfilleuls/, (msg) => {
   bot.sendMessage(msg.chat.id, `👥 Tu as ${data.filleuls.length} filleuls :\n${filleulsList}`);
 });
 
-// === /abonnement & paiements ===
+// === /abonnement ===
 bot.onText(/\/abonnement/, (msg) => {
   const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
   const message = `
@@ -152,51 +173,54 @@ bot.onText(/\/abonnement/, (msg) => {
   bot.sendPhoto(msg.chat.id, imageURL, { caption: message, parse_mode: "Markdown" });
 });
 
+// Moyens de paiement
 bot.onText(/\/paypal/, (msg) => {
   const text = `🔵 *Paiement PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 2000 FCFA (~$3.30)\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
-
 bot.onText(/\/wave/, (msg) => {
   const text = `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
-
 bot.onText(/\/om/, (msg) => {
   const text = `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
-
 bot.onText(/\/mtn/, (msg) => {
   const text = `💛 *MTN Money*\n📱 ${config.MTN_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 
-// === callback bouton ===
-bot.on("callback_query", (query) => {
-  if (query.data === "demander_acces") {
-    bot.sendMessage(query.message.chat.id, "🔄 Redirection vers /acces...");
-    bot.emit("message", { text: "/acces", chat: { id: query.message.chat.id }, from: query.from });
+// === /preuve ===
+bot.onText(/\/preuve (.+)/, (msg, match) => {
+  const userId = msg.from.id;
+  const proofText = match[1];
+  const username = msg.from.username || `ID:${userId}`;
+  const chatId = msg.chat.id;
+
+  if (!proofText) {
+    return bot.sendMessage(chatId, '❌ Veuillez envoyer une preuve valide après la commande, exemple: /preuve capture écran, reçu, etc.');
+  }
+
+  pending[userId] = { username, chatId, proof: proofText, requestedAt: new Date().toISOString() };
+  savePending();
+
+  bot.sendMessage(chatId, `📬 Preuve reçue, l’admin vérifiera et validera la demande.`);
+  if (config.ADMIN_ID) {
+    bot.sendMessage(config.ADMIN_ID, `🔔 Nouvelle preuve de paiement de @${username} (ID: ${userId}) :\n${proofText}\nValide avec /valider ${userId}`);
   }
 });
 
 // === /acces ===
 bot.onText(/\/acces/, (msg) => {
   const userId = msg.from.id;
-  const username = msg.from.username || `ID:${userId}`;
   const chatId = msg.chat.id;
 
   if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
     return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
-  pending[userId] = { username, chatId, requestedAt: new Date().toISOString() };
-  savePending();
-
-  bot.sendMessage(chatId, `📬 Demande envoyée. L’admin validera après vérification.`);
-  if (config.ADMIN_ID) {
-    bot.sendMessage(config.ADMIN_ID, `🔔 Demande : @${username} (ID: ${userId})\nValide avec /valider ${userId}`);
-  }
+  bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 2000 FCFA via /abonnement.`);
 });
 
 // === /valider ===
@@ -210,16 +234,41 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
   if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande pour cet ID.`);
 
   let bonus = 0;
-  if (referrals[userId] && referrals[userId].filleuls.length >= 3) bonus = 30;
+  if (referrals[userId] && referrals[userId].filleuls.length >= 3) {
+    bonus = 30;
+  }
 
   const exp = getExpirationDate(30 + bonus);
   subscribers[userId] = { username: request.username, expires: exp };
   saveSubscribers();
+
   delete pending[userId];
   savePending();
 
-  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
+  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien d'accès premium :\n${config.CHANNEL_LINK}`);
   bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
+
+  if (bonus > 0) {
+    bot.sendMessage(userId, `🎉 Ton abonnement est prolongé de 1 mois grâce à tes 3 filleuls !`);
+  }
+});
+
+// === /rejeter ===
+bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
+  if (String(msg.from.id) !== String(config.ADMIN_ID)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
+  }
+
+  const userId = match[1];
+  const reason = match[2];
+  const request = pending[userId];
+  if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande en attente pour cet ID.`);
+
+  delete pending[userId];
+  savePending();
+
+  bot.sendMessage(request.chatId, `❌ Ta demande d'accès a été rejetée.\nRaison : ${reason}`);
+  bot.sendMessage(msg.chat.id, `✅ Demande de @${request.username} (ID: ${userId}) rejetée.\nRaison : ${reason}`);
 });
 
 // === /status ===
@@ -233,7 +282,7 @@ bot.onText(/\/status/, (msg) => {
   }
 });
 
-// === Auto-clean abonnés expirés chaque heure ===
+// === Nettoyage abonnés expirés (toutes les heures) ===
 setInterval(() => {
   const now = new Date();
   let changed = false;
@@ -241,6 +290,8 @@ setInterval(() => {
     if (new Date(subscribers[userId].expires) < now) {
       delete subscribers[userId];
       changed = true;
+      // Optionnel: avertir l'utilisateur
+      // bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
     }
   }
   if (changed) saveSubscribers();
