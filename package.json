@@ -1,0 +1,13 @@
+{
+  "name": "telegram-paypal-bot",
+  "version": "1.0.0",
+  "description": "Bot Telegram pour gérer les abonnements payants via PayPal",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.61.0"
+  }
+}
