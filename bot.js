@@ -83,7 +83,34 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   }
 
   const image = 'https://files.catbox.moe/dsmhrq.jpg';
-  const menu = `
+  const menu = `👋 Bienvenue sur notre service premium !
+
+🎯 Ici, vous pourrez accéder à une plateforme exclusive avec plusieurs services haut de gamme après activation de votre abonnement.
+
+🛠️ Voici ce que vous obtiendrez une fois votre paiement confirmé :
+
+🔐 Accès à un canal/serveur privé avec :
+• 📦 Ressources premium (outils, bots, scripts)
+• 📘 Formations ou tutoriels spécialisés
+• 💬 Assistance prioritaire via bot
+• 📢 Alertes/infos exclusives en temps réel
+• 🎁 Bonus réguliers pour les membres actifs
+• 👥 Parrainage récompensé via `/promo`
+
+💳 Moyens de paiement disponibles :
+• PayPal 🌍
+• Wave 🌊
+• Orange Money 🟠
+• MTN Mobile Money 🟡
+
+✅ Une fois le virement effectué, vous recevrez un accès automatique à tous les services.
+
+👉 Pour commencer, tapez la commande :
+
+/abonnement — Voir les moyens de paiement
+
+Merci de votre confiance et bonne découverte 💼🔥
+
 ╔════════════════════
 ║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
 ╠════════════════════
