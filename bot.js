@@ -1,59 +1,64 @@
 import TelegramBot from 'node-telegram-bot-api';
+import express from 'express';
 import fs from 'fs';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-const bot = new TelegramBot(config.BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(config.BOT_TOKEN, { webHook: { port: process.env.PORT || 3000 } });
+
+const app = express();
+app.use(express.json());
+
+// === fichiers JSON ===
 const subscribersPath = './subscribers.json';
-const pendingRequestsPath = './pending.json';
+const pendingPath = './pending.json';
 
-let subscribers = fs.existsSync(subscribersPath)
-  ? JSON.parse(fs.readFileSync(subscribersPath))
-  : {};
-
-let pending = fs.existsSync(pendingRequestsPath)
-  ? JSON.parse(fs.readFileSync(pendingRequestsPath))
-  : {};
+let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(subscribersPath)) : {};
+let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
 
 function saveSubscribers() {
   fs.writeFileSync(subscribersPath, JSON.stringify(subscribers, null, 2));
 }
-
 function savePending() {
-  fs.writeFileSync(pendingRequestsPath, JSON.stringify(pending, null, 2));
+  fs.writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
 }
-
 function getExpirationDate() {
   const now = new Date();
   now.setDate(now.getDate() + 30);
   return now.toISOString();
 }
 
-// Commande /start
+// === commandes Telegram ===
 bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, `👋 Bienvenue, ${msg.from.first_name} !\n\nPour accéder à la chaîne privée, utilise la commande /abonnement.`);
+  bot.sendMessage(msg.chat.id, `👋 Bienvenue ${msg.from.first_name} !\n\nUtilise /abonnement pour t'abonner.`);
 });
 
-// Commande /abonnement
 bot.onText(/\/abonnement/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(
-    chatId,
-    `💳 Pour t'abonner, effectue un paiement de 2000 FCFA (~$3.30) via PayPal :\n\n👉 ${config.PAYPAL_LINK}\n\nEnsuite, clique sur /acces pour demander l'accès.`
-  );
+  bot.sendMessage(msg.chat.id, `💳 Pour t'abonner, envoie 2000 FCFA (~$3.30) via PayPal :\n👉 ${config.PAYPAL_LINK}\n\nOu utilise /wave pour payer via Wave.\n\nClique sur /acces après paiement.`);
 });
 
-// Commande /acces
-bot.onText(/\/acces/, async (msg) => {
+bot.onText(/\/wave/, (msg) => {
+  const message = `🌊 Paiement par Wave\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nClique ci-dessous quand c’est fait.`;
+  bot.sendMessage(msg.chat.id, message, {
+    reply_markup: {
+      inline_keyboard: [[{ text: "✅ J’ai payé", callback_data: "demander_acces" }]]
+    }
+  });
+});
+
+bot.on("callback_query", (query) => {
+  if (query.data === "demander_acces") {
+    bot.sendMessage(query.message.chat.id, "🔄 Redirection vers /acces...");
+    bot.emit("message", { text: "/acces", chat: { id: query.message.chat.id }, from: query.from });
+  }
+});
+
+bot.onText(/\/acces/, (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const username = msg.from.username || `ID:${userId}`;
 
-  if (subscribers[userId]) {
-    const expDate = new Date(subscribers[userId].expires);
-    if (expDate > new Date()) {
-      return bot.sendMessage(chatId, `✅ Tu as déjà accès. Voici le lien :\n${config.CHANNEL_LINK}`);
-    }
+  if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
+    return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
   pending[userId] = {
@@ -63,86 +68,54 @@ bot.onText(/\/acces/, async (msg) => {
   };
   savePending();
 
-  bot.sendMessage(chatId, `📬 Demande d'accès envoyée. L'admin va vérifier ton paiement.`);
+  bot.sendMessage(chatId, `📬 Demande envoyée. L'admin validera après vérification.`);
 
   if (config.ADMIN_ID) {
-    bot.sendMessage(config.ADMIN_ID, `🔔 Demande d'accès de @${username} (ID: ${userId})\nTape : /valider ${userId} pour valider.`);
+    bot.sendMessage(config.ADMIN_ID, `🔔 Demande d’accès : @${username} (ID: ${userId})\nValide avec /valider ${userId}`);
   }
 });
 
-// Commande /valider
-bot.onText(/\/valider (\d+)/, async (msg, match) => {
-  const adminId = msg.from.id;
-  if (config.ADMIN_ID && String(adminId) !== String(config.ADMIN_ID)) {
-    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin.');
-  }
+bot.onText(/\/valider (\\d+)/, (msg, match) => {
+  if (String(msg.from.id) !== String(config.ADMIN_ID)) return bot.sendMessage(msg.chat.id, '⛔ Réservé à l’admin');
 
   const userId = match[1];
   const request = pending[userId];
 
-  if (!request) {
-    return bot.sendMessage(msg.chat.id, `❌ Aucun utilisateur en attente avec l'ID ${userId}.`);
-  }
+  if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucun utilisateur avec ID ${userId}`);
 
-  const expDate = getExpirationDate();
-  subscribers[userId] = {
-    username: request.username,
-    expires: expDate,
-  };
+  const exp = getExpirationDate();
+  subscribers[userId] = { username: request.username, expires: exp };
   saveSubscribers();
   delete pending[userId];
   savePending();
 
-  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien d'accès :\n${config.CHANNEL_LINK}`);
-  bot.sendMessage(msg.chat.id, `✅ Utilisateur @${request.username} validé jusqu'au ${expDate}.`);
+  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
+  bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
 });
 
-// Commande /wave
-bot.onText(/\/wave/, (msg) => {
-  const chatId = msg.chat.id;
-
-  const message = `🌊 Paiement par Wave\n\n📱 Numéro : ${config.WAVE_NUMBER}\n💵 Montant : 2000 FCFA (~$3.30)\n\nAprès paiement, clique sur le bouton ci-dessous pour demander l'accès.`;
-
-  bot.sendMessage(chatId, message, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "✅ J’ai payé", callback_data: "demander_acces" }]
-      ]
-    }
-  });
-});
-
-// Gérer le bouton "J’ai payé" (Wave)
-bot.on("callback_query", async (query) => {
-  const chatId = query.message.chat.id;
-
-  if (query.data === "demander_acces") {
-    await bot.sendMessage(chatId, `🔄 Redirection vers la commande /acces...`);
-    bot.emit('text', { text: "/acces", chat: { id: chatId }, from: query.from });
-  }
-
-  bot.answerCallbackQuery(query.id);
-});
-
-// Auto-clean des abonnés expirés
-setInterval(async () => {
+// Nettoyage auto des expirés
+setInterval(() => {
   const now = new Date();
   let changed = false;
 
   for (const userId in subscribers) {
-    const exp = new Date(subscribers[userId].expires);
-    if (exp < now) {
-      try {
-        await bot.banChatMember(config.CHANNEL_LINK, Number(userId));
-        await bot.unbanChatMember(config.CHANNEL_LINK, Number(userId));
-        console.log(`🚫 Utilisateur ${userId} retiré de la chaîne`);
-      } catch (err) {
-        console.error(`Erreur suppression ${userId} :`, err.message);
-      }
+    if (new Date(subscribers[userId].expires) < now) {
       delete subscribers[userId];
       changed = true;
     }
   }
-
   if (changed) saveSubscribers();
 }, 3600000);
+
+// === Démarrage Express + Webhook ===
+const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
+bot.setWebHook(`${HOST}/bot${config.BOT_TOKEN}`);
+
+app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log('🚀 Bot Webhook en écoute !');
+});
