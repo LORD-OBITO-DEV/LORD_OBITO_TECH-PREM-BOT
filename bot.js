@@ -8,7 +8,6 @@ const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-// === Fichiers JSON ===
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
 const referralsPath = './referrals.json';
@@ -17,7 +16,6 @@ let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(su
 let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
 let referrals = fs.existsSync(referralsPath) ? JSON.parse(fs.readFileSync(referralsPath)) : {};
 
-// === Fonctions utiles ===
 function save(obj, path) {
   fs.writeFileSync(path, JSON.stringify(obj, null, 2));
 }
@@ -89,6 +87,8 @@ bot.on("callback_query", (query) => {
   const data = query.data;
   const id = query.message.chat.id;
 
+  bot.answerCallbackQuery(query.id); // ← ESSENTIEL
+
   const commandMap = {
     abonnement: "/abonnement",
     codepromo: "/codepromo",
@@ -132,18 +132,19 @@ bot.onText(/\/abonnement/, msg => {
   });
 });
 
-bot.onText(/\/paypal/, msg => {
-  bot.sendMessage(msg.chat.id, `🔵 *PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
-});
-bot.onText(/\/wave/, msg => {
-  bot.sendMessage(msg.chat.id, `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
-});
-bot.onText(/\/om/, msg => {
-  bot.sendMessage(msg.chat.id, `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
-});
-bot.onText(/\/mtn/, msg => {
-  bot.sendMessage(msg.chat.id, `💛 *MTN*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
-});
+// === Moyens de paiement ===
+bot.onText(/\/paypal/, msg =>
+  bot.sendMessage(msg.chat.id, `🔵 *PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
+);
+bot.onText(/\/wave/, msg =>
+  bot.sendMessage(msg.chat.id, `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
+);
+bot.onText(/\/om/, msg =>
+  bot.sendMessage(msg.chat.id, `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
+);
+bot.onText(/\/mtn/, msg =>
+  bot.sendMessage(msg.chat.id, `💛 *MTN*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
+);
 
 // === Autres commandes ===
 bot.onText(/\/codepromo/, msg => {
@@ -211,7 +212,7 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
   bot.sendMessage(msg.chat.id, `✅ Validé pour @${req.username}`);
 });
 
-// === Nettoyage automatique ===
+// === Nettoyage auto
 setInterval(() => {
   const now = new Date();
   let changed = false;
@@ -224,10 +225,9 @@ setInterval(() => {
   if (changed) save(subscribers, subscribersPath);
 }, 3600000);
 
-// === Webhook ===
+// === Webhook
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
-bot.setWebHook(`${HOST}/bot${config.BOT_TOKEN}`);
+bot.setWebHook(`${config.WEBHOOK_URL}/bot${config.BOT_TOKEN}`);
 app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
