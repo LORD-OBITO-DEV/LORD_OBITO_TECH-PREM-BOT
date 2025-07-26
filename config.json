@@ -1,8 +1,10 @@
 {
   "BOT_TOKEN": "8253660715:AAGicEunczy4mGznNYAVl9bnni3LC5vh6TA",
-  "PAYPAL_LINK": "https://www.paypal.me/4413396713991763",
+  "ADMIN_ID": "6587556123",
   "CHANNEL_LINK": "https://t.me/+chjZIks8n3M2Mzdk",
-  "ADMIN_ID": 6587556123,
+  "PAYPAL_LINK": "https://www.paypal.me/4413396713991763",
   "WAVE_NUMBER": "+2250712668494",
+  "OM_NUMBER": "+2250712668494",
+  "MTN_NUMBER": "+2250504219934",
   "WEBHOOK_URL": "https://lord-obito-tech-prem-bot.onrender.com"
 }
