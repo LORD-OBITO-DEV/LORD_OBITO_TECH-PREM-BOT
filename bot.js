@@ -142,7 +142,7 @@ bot.onText(/\/help/, (msg) => {
 /promo — Ton lien de parrainage
 /valider <id> — (admin) Valider un paiement
 /rejeter <id> <raison> — (admin) Rejeter une demande d'accès
-/abonnés — (admin) Liste tous les abonnés
+/abonnes — (admin) Liste tous les abonnés
 /preuve <texte> — Envoyer une preuve de paiement
 `;
 
@@ -317,8 +317,8 @@ bot.onText(/\/status/, (msg) => {
   }
 });
 
-// === /abonnés (admin) ===
-bot.onText(/\/abonnés/, (msg) => {
+// === /abonnes (admin) ===
+bot.onText(/\/abonnes/, (msg) => {
   if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
