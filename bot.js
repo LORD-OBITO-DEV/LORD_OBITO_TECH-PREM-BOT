@@ -30,7 +30,7 @@ function generateReferralCode() {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// === Commande /start ===
+// === /start ===
 bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -54,22 +54,17 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   }
 
   const image = 'https://files.catbox.moe/dsmhrq.jpg';
-  const menu = `
+  const caption = `
 ╔════════════════════
 ║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
 ╠════════════════════
-║ ✞︎ /abonnement — Voir les moyens de paiement
-║ ✞︎ /status — Vérifier ton abonnement
-║ ✞︎ /promo — Gagne 1 mois gratuit
-║ ✞︎ /codepromo — Ton code personnel
-║ ✞︎ /mesfilleuls — Voir tes filleuls
-║ ✞︎ /help — Liste des commandes
+║ Bienvenue dans le bot premium !
 ╚════════════════════════
 © BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
 `;
 
   bot.sendPhoto(chatId, image, {
-    caption: menu,
+    caption,
     parse_mode: "Markdown",
     reply_markup: {
       inline_keyboard: [
@@ -89,52 +84,68 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   });
 });
 
-// === Boutons de raccourcis ===
+// === Callback boutons ===
 bot.on("callback_query", (query) => {
   const data = query.data;
   const id = query.message.chat.id;
 
-  if (data === "abonnement") bot.emit("message", { chat: { id }, from: query.from, text: "/abonnement" });
-  if (data === "codepromo") bot.emit("message", { chat: { id }, from: query.from, text: "/codepromo" });
-  if (data === "promo") bot.emit("message", { chat: { id }, from: query.from, text: "/promo" });
-  if (data === "status") bot.emit("message", { chat: { id }, from: query.from, text: "/status" });
-  if (data === "mesfilleuls") bot.emit("message", { chat: { id }, from: query.from, text: "/mesfilleuls" });
+  const commandMap = {
+    abonnement: "/abonnement",
+    codepromo: "/codepromo",
+    promo: "/promo",
+    status: "/status",
+    mesfilleuls: "/mesfilleuls",
+    paypal: "/paypal",
+    wave: "/wave",
+    om: "/om",
+    mtn: "/mtn"
+  };
+
+  if (commandMap[data]) {
+    bot.emit("message", { chat: { id }, from: query.from, text: commandMap[data] });
+  }
 });
 
-// === Commandes restantes ===
-bot.onText(/\/help/, msg => {
-  bot.sendMessage(msg.chat.id, `
-📌 *Commandes* :
-/abonnement — Moyens de paiement
-/status — Ton abonnement
-/codepromo — Code personnel
-/mesfilleuls — Tes filleuls
-/promo — Ton lien d'invitation
-/valider <id> — Admin uniquement
-`, { parse_mode: "Markdown" });
-});
-
+// === /abonnement ===
 bot.onText(/\/abonnement/, msg => {
   const image = 'https://files.catbox.moe/4m5nb4.jpg';
   const message = `
 💳 *Abonnement Premium* — 1000 FCFA (~$1.65)
 
-📎 Moyens :
-• PayPal : /paypal
-• Wave : /wave
-• Orange Money : /om
-• MTN : /mtn
+✅ Choisissez un moyen de paiement ci-dessous 👇`;
 
-✅ Clique sur /acces après paiement.`;
-
-  bot.sendPhoto(msg.chat.id, image, { caption: message, parse_mode: "Markdown" });
+  bot.sendPhoto(msg.chat.id, image, {
+    caption: message,
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "💰 PayPal", callback_data: "paypal" },
+          { text: "🌊 Wave", callback_data: "wave" }
+        ],
+        [
+          { text: "🟠 Orange", callback_data: "om" },
+          { text: "💛 MTN", callback_data: "mtn" }
+        ]
+      ]
+    }
+  });
 });
 
-bot.onText(/\/paypal/, msg => bot.sendMessage(msg.chat.id, `🔵 *PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" }));
-bot.onText(/\/wave/, msg => bot.sendMessage(msg.chat.id, `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" }));
-bot.onText(/\/om/, msg => bot.sendMessage(msg.chat.id, `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" }));
-bot.onText(/\/mtn/, msg => bot.sendMessage(msg.chat.id, `💛 *MTN*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" }));
+bot.onText(/\/paypal/, msg => {
+  bot.sendMessage(msg.chat.id, `🔵 *PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
+});
+bot.onText(/\/wave/, msg => {
+  bot.sendMessage(msg.chat.id, `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
+});
+bot.onText(/\/om/, msg => {
+  bot.sendMessage(msg.chat.id, `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
+});
+bot.onText(/\/mtn/, msg => {
+  bot.sendMessage(msg.chat.id, `💛 *MTN*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" });
+});
 
+// === Autres commandes ===
 bot.onText(/\/codepromo/, msg => {
   const id = msg.from.id;
   if (!referrals[id]) referrals[id] = { code: generateReferralCode(), filleuls: [] }, save(referrals, referralsPath);
@@ -155,6 +166,16 @@ bot.onText(/\/mesfilleuls/, msg => {
   const data = referrals[id];
   if (!data || !data.filleuls?.length) return bot.sendMessage(msg.chat.id, `😔 Aucun filleul.`);
   bot.sendMessage(msg.chat.id, `👥 Tu as ${data.filleuls.length} filleuls :\n${data.filleuls.map(i => `- ${i}`).join('\n')}`);
+});
+
+bot.onText(/\/status/, msg => {
+  const id = msg.from.id;
+  const sub = subscribers[id];
+  if (sub && new Date(sub.expires) > new Date()) {
+    bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
+  } else {
+    bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
+  }
 });
 
 bot.onText(/\/acces/, msg => {
@@ -188,16 +209,6 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
   save(pending, pendingPath);
   bot.sendMessage(req.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
   bot.sendMessage(msg.chat.id, `✅ Validé pour @${req.username}`);
-});
-
-bot.onText(/\/status/, msg => {
-  const id = msg.from.id;
-  const sub = subscribers[id];
-  if (sub && new Date(sub.expires) > new Date()) {
-    bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
-  } else {
-    bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
-  }
 });
 
 // === Nettoyage automatique ===
