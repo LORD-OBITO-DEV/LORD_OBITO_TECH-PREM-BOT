@@ -9,10 +9,6 @@ const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 const app = express();
 app.use(express.json());
 
-function isAdmin(userId) {
-  return String(userId) === String(config.ADMIN_ID);
-}
-
 // === Fichiers JSON ===
 const subscribersPath = './subscribers.json';
 const pendingPath = './pending.json';
@@ -83,34 +79,7 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   }
 
   const image = 'https://files.catbox.moe/dsmhrq.jpg';
-  const menu = `👋 Bienvenue sur notre service premium !
-
-🎯 Ici, vous pourrez accéder à une plateforme exclusive avec plusieurs services haut de gamme après activation de votre abonnement.
-
-🛠️ Voici ce que vous obtiendrez une fois votre paiement confirmé :
-
-🔐 Accès à un canal/serveur privé avec :
-• 📦 Ressources premium (outils, bots, scripts)
-• 📘 Formations ou tutoriels spécialisés
-• 💬 Assistance prioritaire via bot
-• 📢 Alertes/infos exclusives en temps réel
-• 🎁 Bonus réguliers pour les membres actifs
-• 👥 Parrainage récompensé via /promo
-
-💳 Moyens de paiement disponibles :
-• PayPal 🌍
-• Wave 🌊
-• Orange Money 🟠
-• MTN Mobile Money 🟡
-
-✅ Une fois le virement effectué, vous recevrez un accès automatique à tous les services.
-
-👉 Pour commencer, tapez la commande :
-
-/abonnement — Voir les moyens de paiement
-
-Merci de votre confiance et bonne découverte 💼🔥
-
+  const menu = `
 ╔════════════════════
 ║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
 ╠════════════════════
@@ -137,15 +106,9 @@ bot.onText(/\/help/, (msg) => {
 /codepromo — Voir ton code promo
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
+/valider <id> — (admin) Valider un paiement
 /preuve <texte> — Envoyer une preuve de paiement
-/acces — Vérifie ton accès après paiement
-
-👑 *Commandes Admin* :
-/valider <id> — Valider un paiement
-/rejeter <id> <raison> — Rejeter une demande d'accès
-/prem <id> — Donner un abonnement premium
-/unprem <id> — Supprimer un abonnement premium
-/abonnes — Liste des abonnés
+/rejeter <id> <raison> — (admin) Rejeter une demande d'accès
 `;
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
@@ -306,39 +269,6 @@ bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
 
   bot.sendMessage(request.chatId, `❌ Ta demande d'accès a été rejetée.\nRaison : ${reason}`);
   bot.sendMessage(msg.chat.id, `✅ Demande de @${request.username} (ID: ${userId}) rejetée.\nRaison : ${reason}`);
-});
-
-bot.onText(/\/prem (\d+)/, (msg, match) => {
-  if (!isAdmin(msg.from.id)) {
-    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
-  }
-
-  const userId = match[1];
-  const username = referrals[userId]?.username || `ID:${userId}`;
-
-  const exp = getExpirationDate(30); // 30 jours par défaut
-  subscribers[userId] = { username, expires: exp };
-  saveSubscribers();
-
-  bot.sendMessage(userId, `🎉 Ton abonnement premium a été activé manuellement par l'admin !`);
-  bot.sendMessage(msg.chat.id, `✅ Premium accordé à ${username}`);
-});
-
-bot.onText(/\/unprem (\d+)/, (msg, match) => {
-  if (!isAdmin(msg.from.id)) {
-    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
-  }
-
-  const userId = match[1];
-  if (!subscribers[userId]) {
-    return bot.sendMessage(msg.chat.id, `ℹ️ Cet utilisateur n’a pas d’abonnement actif.`);
-  }
-
-  delete subscribers[userId];
-  saveSubscribers();
-
-  bot.sendMessage(userId, `⚠️ Ton abonnement premium a été révoqué par l’admin.`);
-  bot.sendMessage(msg.chat.id, `✅ Abonnement de l'utilisateur ${userId} révoqué.`);
 });
 
 // === /status ===
