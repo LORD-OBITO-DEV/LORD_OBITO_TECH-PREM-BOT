@@ -5,6 +5,7 @@ import crypto from 'crypto';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
+
 const app = express();
 app.use(express.json());
 
@@ -16,8 +17,14 @@ let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(su
 let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
 let referrals = fs.existsSync(referralsPath) ? JSON.parse(fs.readFileSync(referralsPath)) : {};
 
-function save(obj, path) {
-  fs.writeFileSync(path, JSON.stringify(obj, null, 2));
+function saveSubscribers() {
+  fs.writeFileSync(subscribersPath, JSON.stringify(subscribers, null, 2));
+}
+function savePending() {
+  fs.writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
+}
+function saveReferrals() {
+  fs.writeFileSync(referralsPath, JSON.stringify(referrals, null, 2));
 }
 function getExpirationDate(days = 30) {
   const now = new Date();
@@ -28,7 +35,7 @@ function generateReferralCode() {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// === /start ===
+// === /start avec parrainage ===
 bot.onText(/\/start(?: (.+))?/, (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -41,197 +48,203 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
       if (!parrainData.filleuls) parrainData.filleuls = [];
       if (!parrainData.filleuls.includes(String(userId)) && userId !== Number(parrainId)) {
         parrainData.filleuls.push(String(userId));
-        save(referrals, referralsPath);
+        referrals[parrainId] = parrainData;
+        saveReferrals();
       }
     }
   }
 
   if (!referrals[userId]) {
     referrals[userId] = { code: generateReferralCode(), filleuls: [] };
-    save(referrals, referralsPath);
+    saveReferrals();
   }
 
   const image = 'https://files.catbox.moe/dsmhrq.jpg';
-  const caption = `
+  const menu = `
 ╔════════════════════
 ║—͟͟͞͞➸⃝LORD_OBITO_TECH_PREM_BOT⍣⃝💀
 ╠════════════════════
-║ Bienvenue dans le bot premium !
+║ ✞︎ /abonnement — Voir les moyens de paiement
+║ ✞︎ /status — Vérifier ton abonnement
+║ ✞︎ /promo — Gagne 1 mois gratuit
+║ ✞︎ /codepromo — Ton code personnel
+║ ✞︎ /mesfilleuls — Voir tes filleuls
+║ ✞︎ /help — Liste des commandes
 ╚════════════════════════
 © BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
 `;
-
-  bot.sendPhoto(chatId, image, {
-    caption,
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "📦 Abonnement", callback_data: "abonnement" },
-          { text: "🎁 Code Promo", callback_data: "codepromo" }
-        ],
-        [
-          { text: "👤 Status", callback_data: "status" },
-          { text: "👥 Mes filleuls", callback_data: "mesfilleuls" }
-        ],
-        [
-          { text: "📣 Parrainer (bonus)", callback_data: "promo" }
-        ]
-      ]
-    }
-  });
+  bot.sendPhoto(chatId, image, { caption: menu, parse_mode: "Markdown" });
 });
 
-// === Callback boutons ===
-bot.on("callback_query", (query) => {
-  const data = query.data;
-  const id = query.message.chat.id;
+// === /help ===
+bot.onText(/\/help/, (msg) => {
+  const text = `
+📌 *Commandes disponibles* :
 
-  bot.answerCallbackQuery(query.id); // ← ESSENTIEL
+/start — Démarrer le bot
+/abonnement — Voir les moyens de paiement
+/status — Vérifier ton abonnement
+/codepromo — Voir ton code promo
+/mesfilleuls — Liste de tes filleuls
+/promo — Ton lien de parrainage
+/valider <id> — (admin) Valider un paiement
+`;
+  bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
+});
 
-  const commandMap = {
-    abonnement: "/abonnement",
-    codepromo: "/codepromo",
-    promo: "/promo",
-    status: "/status",
-    mesfilleuls: "/mesfilleuls",
-    paypal: "/paypal",
-    wave: "/wave",
-    om: "/om",
-    mtn: "/mtn"
-  };
-
-  if (commandMap[data]) {
-    bot.emit("message", { chat: { id }, from: query.from, text: commandMap[data] });
+// === /codepromo ===
+bot.onText(/\/codepromo/, (msg) => {
+  const userId = msg.from.id;
+  if (!referrals[userId]) {
+    referrals[userId] = { code: generateReferralCode(), filleuls: [] };
+    saveReferrals();
   }
+  const code = referrals[userId].code;
+  bot.sendMessage(msg.chat.id, `🎫 Ton code promo : *${code}*\nPartage-le avec /start ${code}`, { parse_mode: "Markdown" });
+});
+
+// === /promo ===
+bot.onText(/\/promo/, (msg) => {
+  const userId = msg.from.id;
+  const username = msg.from.username || null;
+
+  if (!referrals[userId]) {
+    referrals[userId] = { code: generateReferralCode(), filleuls: [] };
+    saveReferrals();
+  }
+
+  const code = referrals[userId].code;
+  const startLink = username
+    ? `https://t.me/${config.BOT_USERNAME}?start=${code}`
+    : `Partage ton code avec /start ${code}`;
+
+  const message = `🎁 Invite tes amis avec ce lien :\n${startLink}\n\n3 filleuls = 1 mois gratuit ! 🔥`;
+  bot.sendMessage(msg.chat.id, message);
+});
+
+// === /mesfilleuls ===
+bot.onText(/\/mesfilleuls/, (msg) => {
+  const userId = msg.from.id;
+  const data = referrals[userId];
+  if (!data || !data.filleuls || data.filleuls.length === 0) {
+    return bot.sendMessage(msg.chat.id, `😔 Tu n'as pas encore de filleuls.`);
+  }
+  const filleulsList = data.filleuls.map(id => `- ID: ${id}`).join('\n');
+  bot.sendMessage(msg.chat.id, `👥 Tu as ${data.filleuls.length} filleuls :\n${filleulsList}`);
 });
 
 // === /abonnement ===
-bot.onText(/\/abonnement/, msg => {
-  const image = 'https://files.catbox.moe/4m5nb4.jpg';
+bot.onText(/\/abonnement/, (msg) => {
+  const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
   const message = `
 💳 *Abonnement Premium* — 1000 FCFA (~$1.65)
 
-✅ Choisissez un moyen de paiement ci-dessous 👇`;
+📎 Moyens de paiement :
+• PayPal : /paypal
+• Wave : /wave 🌊
+• Orange Money : /om
+• MTN Money : /mtn
 
-  bot.sendPhoto(msg.chat.id, image, {
-    caption: message,
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "💰 PayPal", callback_data: "paypal" },
-          { text: "🌊 Wave", callback_data: "wave" }
-        ],
-        [
-          { text: "🟠 Orange", callback_data: "om" },
-          { text: "💛 MTN", callback_data: "mtn" }
-        ]
-      ]
-    }
-  });
+✅ Clique sur /acces après paiement.
+`;
+  bot.sendPhoto(msg.chat.id, imageURL, { caption: message, parse_mode: "Markdown" });
 });
 
-// === Moyens de paiement ===
-bot.onText(/\/paypal/, msg =>
-  bot.sendMessage(msg.chat.id, `🔵 *PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
-);
-bot.onText(/\/wave/, msg =>
-  bot.sendMessage(msg.chat.id, `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
-);
-bot.onText(/\/om/, msg =>
-  bot.sendMessage(msg.chat.id, `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
-);
-bot.onText(/\/mtn/, msg =>
-  bot.sendMessage(msg.chat.id, `💛 *MTN*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`, { parse_mode: "Markdown" })
-);
-
-// === Autres commandes ===
-bot.onText(/\/codepromo/, msg => {
-  const id = msg.from.id;
-  if (!referrals[id]) referrals[id] = { code: generateReferralCode(), filleuls: [] }, save(referrals, referralsPath);
-  bot.sendMessage(msg.chat.id, `🎫 Ton code promo : *${referrals[id].code}*\n/start ${referrals[id].code}`, { parse_mode: "Markdown" });
+// === Paiements avec images ===
+bot.onText(/\/paypal/, (msg) => {
+  const img = 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg';
+  const caption = `🔵 *Paiement via PayPal*\n💵 *Montant :* 1000 FCFA (~$1.65)\n🔗 *Lien :* ${config.PAYPAL_LINK}\n✅ Après paiement, clique sur /acces ou envoie une preuve avec /preuve.`;
+  bot.sendPhoto(msg.chat.id, img, { caption, parse_mode: "Markdown" });
 });
 
-bot.onText(/\/promo/, msg => {
-  const id = msg.from.id;
-  const username = msg.from.username;
-  if (!referrals[id]) referrals[id] = { code: generateReferralCode(), filleuls: [] }, save(referrals, referralsPath);
-  const code = referrals[id].code;
-  const link = username ? `https://t.me/${config.BOT_USERNAME}?start=${code}` : `/start ${code}`;
-  bot.sendMessage(msg.chat.id, `🎁 Invite avec ce lien :\n${link}\n\n3 filleuls = 1 mois gratuit !`);
+bot.onText(/\/wave/, (msg) => {
+  const img = 'https://cdn.futura-sciences.com/buildsv6/images/largeoriginal/7/f/e/7fe6f53ab9_50171292_wave.jpg';
+  const caption = `🌊 *Paiement via Wave*\n💵 *Montant :* 1000 FCFA\n📱 *Numéro :* ${config.WAVE_NUMBER}\n✅ Envoie une preuve ou clique sur /acces après paiement.`;
+  bot.sendPhoto(msg.chat.id, img, { caption, parse_mode: "Markdown" });
 });
 
-bot.onText(/\/mesfilleuls/, msg => {
-  const id = msg.from.id;
-  const data = referrals[id];
-  if (!data || !data.filleuls?.length) return bot.sendMessage(msg.chat.id, `😔 Aucun filleul.`);
-  bot.sendMessage(msg.chat.id, `👥 Tu as ${data.filleuls.length} filleuls :\n${data.filleuls.map(i => `- ${i}`).join('\n')}`);
+bot.onText(/\/om/, (msg) => {
+  const img = 'https://seeklogo.com/images/O/orange-money-logo-EF24E88B1E-seeklogo.com.png';
+  const caption = `🟠 *Paiement via Orange Money*\n💵 *Montant :* 1000 FCFA\n📱 *Numéro :* ${config.OM_NUMBER}\n✅ Envoie une preuve ou clique sur /acces après paiement.`;
+  bot.sendPhoto(msg.chat.id, img, { caption, parse_mode: "Markdown" });
 });
 
-bot.onText(/\/status/, msg => {
-  const id = msg.from.id;
-  const sub = subscribers[id];
-  if (sub && new Date(sub.expires) > new Date()) {
-    bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
-  } else {
-    bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
-  }
+bot.onText(/\/mtn/, (msg) => {
+  const img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/MTN_Logo.svg/1280px-MTN_Logo.svg.png';
+  const caption = `💛 *Paiement via MTN Money*\n💵 *Montant :* 1000 FCFA\n📱 *Numéro :* ${config.MTN_NUMBER}\n✅ Envoie une preuve ou clique sur /acces après paiement.`;
+  bot.sendPhoto(msg.chat.id, img, { caption, parse_mode: "Markdown" });
 });
 
-bot.onText(/\/acces/, msg => {
-  const id = msg.from.id;
-  const username = msg.from.username || `ID:${id}`;
+// === /acces ===
+bot.onText(/\/acces/, (msg) => {
+  const userId = msg.from.id;
+  const username = msg.from.username || `ID:${userId}`;
   const chatId = msg.chat.id;
 
-  if (subscribers[id] && new Date(subscribers[id].expires) > new Date()) {
+  if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
     return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
-  pending[id] = { username, chatId, requestedAt: new Date().toISOString() };
-  save(pending, pendingPath);
+  pending[userId] = { username, chatId, requestedAt: new Date().toISOString() };
+  savePending();
 
-  bot.sendMessage(chatId, `📬 Demande envoyée. L’admin validera après vérification.\n\n📝 Merci d'envoyer maintenant :\n- Le *nom du compte utilisé*\n- Le *numéro de paiement*`);
+  bot.sendMessage(chatId, `📬 Demande envoyée. L’admin validera après vérification.`);
   if (config.ADMIN_ID) {
-    bot.sendMessage(config.ADMIN_ID, `🔔 Demande : @${username} (ID: ${id})\nValide avec /valider ${id}`);
+    bot.sendMessage(config.ADMIN_ID, `🔔 Demande : @${username} (ID: ${userId})\nValide avec /valider ${userId}`);
   }
 });
 
+// === /valider ===
 bot.onText(/\/valider (\d+)/, (msg, match) => {
-  if (String(msg.from.id) !== String(config.ADMIN_ID)) return bot.sendMessage(msg.chat.id, '⛔ Admin uniquement');
-  const id = match[1];
-  const req = pending[id];
-  if (!req) return bot.sendMessage(msg.chat.id, `❌ Aucune demande pour cet ID.`);
-  const bonus = referrals[id]?.filleuls?.length >= 3 ? 30 : 0;
+  if (String(msg.from.id) !== String(config.ADMIN_ID)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
+  }
+
+  const userId = match[1];
+  const request = pending[userId];
+  if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande pour cet ID.`);
+
+  let bonus = 0;
+  if (referrals[userId] && referrals[userId].filleuls.length >= 3) bonus = 30;
+
   const exp = getExpirationDate(30 + bonus);
-  subscribers[id] = { username: req.username, expires: exp };
-  save(subscribers, subscribersPath);
-  delete pending[id];
-  save(pending, pendingPath);
-  bot.sendMessage(req.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
-  bot.sendMessage(msg.chat.id, `✅ Validé pour @${req.username}`);
+  subscribers[userId] = { username: request.username, expires: exp };
+  saveSubscribers();
+  delete pending[userId];
+  savePending();
+
+  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien :\n${config.CHANNEL_LINK}`);
+  bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
 });
 
-// === Nettoyage auto
+// === /status ===
+bot.onText(/\/status/, (msg) => {
+  const userId = msg.from.id;
+  const sub = subscribers[userId];
+  if (sub && new Date(sub.expires) > new Date()) {
+    return bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
+  } else {
+    return bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
+  }
+});
+
+// === Auto-clean abonnés expirés chaque heure ===
 setInterval(() => {
   const now = new Date();
   let changed = false;
-  for (const id in subscribers) {
-    if (new Date(subscribers[id].expires) < now) {
-      delete subscribers[id];
+  for (const userId in subscribers) {
+    if (new Date(subscribers[userId].expires) < now) {
+      delete subscribers[userId];
       changed = true;
     }
   }
-  if (changed) save(subscribers, subscribersPath);
+  if (changed) saveSubscribers();
 }, 3600000);
 
-// === Webhook
+// === Webhook config ===
 const PORT = process.env.PORT || 3000;
-bot.setWebHook(`${config.WEBHOOK_URL}/bot${config.BOT_TOKEN}`);
-app.post(`/bot${config.BOT_TOKEN}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Bot Webhook actif sur le port ${PORT}`);
-});
+const HOST = process.env.RENDER_EXTERNAL_URL || config.WEBHOOK_URL;
+
+bot.setWebHook(`${HOST}/bot${config.BOT_TOKEN}`);
+
+app.post(`/bot${config.BOT_TOKEN}`, (req, res
