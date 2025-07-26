@@ -95,7 +95,7 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
 • 💬 Assistance prioritaire via bot
 • 📢 Alertes/infos exclusives en temps réel
 • 🎁 Bonus réguliers pour les membres actifs
-• 👥 Parrainage récompensé via `/promo`
+• 👥 Parrainage récompensé via /promo
 
 💳 Moyens de paiement disponibles :
 • PayPal 🌍
