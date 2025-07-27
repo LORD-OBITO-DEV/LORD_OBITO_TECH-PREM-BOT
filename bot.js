@@ -4,6 +4,12 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
+// ✅ Fonction manquante ajoutée ici
+function isAdmin(userId) {
+  return String(userId) === String(config.ADMIN_ID);
+}
+
 const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 
 const app = express();
