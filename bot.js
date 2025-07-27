@@ -106,14 +106,18 @@ bot.onText(/\/help/, (msg) => {
 /codepromo — Voir ton code promo
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
-/valider <id> — (admin) Valider un paiement
 /preuve <texte> — Envoyer une preuve de paiement
-/rejeter <id> <raison> — (admin) Rejeter une demande d'accès
+
+👑 Commandes administrateur 👑 :
+/valider <id> — Valider un paiement
+/rejeter <id> <raison> — Rejeter une demande d'accès
+/prem <id> — Donner un abonnement premium
+/unprem <id> — Révoquer un abonnement premium
+/abonnes — Voir la liste des abonnés
 `;
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
-
 // === /codepromo ===
 bot.onText(/\/codepromo/, (msg) => {
   const userId = msg.from.id;
@@ -159,9 +163,13 @@ bot.onText(/\/mesfilleuls/, (msg) => {
 
 // === /abonnement ===
 bot.onText(/\/abonnement/, (msg) => {
+  if (isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '👑 En tant qu’admin, tu n’as pas besoin de payer. Accès illimité activé.');
+  }
+
   const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
   const message = `
-💳 *Abonnement Premium* — 2000 FCFA (~$3.30)
+💳 *Abonnement Premium* — 1000 FCFA (~$1.65)
 
 📎 Moyens de paiement :
 • PayPal : /paypal
@@ -175,19 +183,19 @@ bot.onText(/\/abonnement/, (msg) => {
 
 // Moyens de paiement
 bot.onText(/\/paypal/, (msg) => {
-  const text = `🔵 *Paiement PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 2000 FCFA (~$3.30)\nClique /acces après paiement.`;
+  const text = `🔵 *Paiement PayPal*\n👉 ${config.PAYPAL_LINK}\n💵 1000 FCFA (~$1.65)\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 bot.onText(/\/wave/, (msg) => {
-  const text = `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
+  const text = `🌊 *Wave*\n📱 ${config.WAVE_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 bot.onText(/\/om/, (msg) => {
-  const text = `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
+  const text = `🟠 *Orange Money*\n📱 ${config.OM_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 bot.onText(/\/mtn/, (msg) => {
-  const text = `💛 *MTN Money*\n📱 ${config.MTN_NUMBER}\n💵 2000 FCFA\nClique /acces après paiement.`;
+  const text = `💛 *MTN Money*\n📱 ${config.MTN_NUMBER}\n💵 1000 FCFA\nClique /acces après paiement.`;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 
@@ -197,6 +205,10 @@ bot.onText(/\/preuve (.+)/, (msg, match) => {
   const proofText = match[1];
   const username = msg.from.username || `ID:${userId}`;
   const chatId = msg.chat.id;
+
+  if (isAdmin(userId)) {
+    return bot.sendMessage(chatId, `👑 Tu es admin, inutile d’envoyer une preuve.`);
+  }
 
   if (!proofText) {
     return bot.sendMessage(chatId, '❌ Veuillez envoyer une preuve valide après la commande, exemple: /preuve capture écran, reçu, etc.');
@@ -216,11 +228,15 @@ bot.onText(/\/acces/, (msg) => {
   const userId = msg.from.id;
   const chatId = msg.chat.id;
 
+  if (isAdmin(userId)) {
+    return bot.sendMessage(chatId, `✅ Accès illimité administrateur :\n${config.CHANNEL_LINK}`);
+  }
+
   if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
     return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
   }
 
-  bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 2000 FCFA via /abonnement.`);
+  bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
 });
 
 // === /valider ===
@@ -274,12 +290,71 @@ bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
 // === /status ===
 bot.onText(/\/status/, (msg) => {
   const userId = msg.from.id;
+
+  if (isAdmin(userId)) {
+    return bot.sendMessage(msg.chat.id, `👑 Statut : *ADMIN - Accès illimité*`, { parse_mode: 'Markdown' });
+  }
+
   const sub = subscribers[userId];
   if (sub && new Date(sub.expires) > new Date()) {
     return bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
   } else {
     return bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
   }
+});
+
+// === /prem ===
+bot.onText(/\/prem (\d+)/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  const userId = match[1];
+  const username = referrals[userId]?.username || `ID:${userId}`;
+
+  const exp = getExpirationDate(30); // 30 jours
+  subscribers[userId] = { username, expires: exp };
+  saveSubscribers();
+
+  bot.sendMessage(userId, `🎉 Ton abonnement premium a été activé manuellement par l'administrateur.`);
+  bot.sendMessage(msg.chat.id, `✅ Premium accordé à ${username}`);
+});
+
+// === /unprem ===
+bot.onText(/\/unprem (\d+)/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  const userId = match[1];
+
+  if (!subscribers[userId]) {
+    return bot.sendMessage(msg.chat.id, `ℹ️ Cet utilisateur n’a pas d’abonnement actif.`);
+  }
+
+  delete subscribers[userId];
+  saveSubscribers();
+
+  bot.sendMessage(userId, `⚠️ Ton abonnement premium a été révoqué par l’administrateur.`);
+  bot.sendMessage(msg.chat.id, `✅ Abonnement de l'utilisateur ${userId} révoqué.`);
+});
+
+// === /abonnes ===
+bot.onText(/\/abonnes/, (msg) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  const total = Object.keys(subscribers).length;
+  if (total === 0) {
+    return bot.sendMessage(msg.chat.id, '📭 Aucun abonné premium pour le moment.');
+  }
+
+  const liste = Object.entries(subscribers)
+    .map(([id, sub]) => `• ${sub.username} (ID: ${id})\n  Expires: ${new Date(sub.expires).toLocaleDateString()}`)
+    .join('\n\n');
+
+  bot.sendMessage(msg.chat.id, `📋 *Liste des abonnés premium* (${total}) :\n\n${liste}`, { parse_mode: 'Markdown' });
 });
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
