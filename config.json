@@ -8,4 +8,5 @@
   "MTN_NUMBER": "+2250504219934",
   "WEBHOOK_URL": "https://lord-obito-tech-prem-bot.onrender.com",
   "BOT_USERNAME": "LORD_OBITO_TECH_PREM_BOT"
+  "MONGO_URI": "mongodb+srv://LORD_OBITO_BOT:QWERTY304@cluster0.5dev5wf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 }
