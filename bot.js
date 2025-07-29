@@ -2,6 +2,8 @@ import TelegramBot from 'node-telegram-bot-api';
 import express from 'express';
 import fs from 'fs';
 import crypto from 'crypto';
+import db from './database.js';
+await db.initDB();
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
