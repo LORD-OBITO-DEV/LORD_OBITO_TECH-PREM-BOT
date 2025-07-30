@@ -2,8 +2,6 @@ import TelegramBot from 'node-telegram-bot-api';
 import express from 'express';
 import fs from 'fs';
 import crypto from 'crypto';
-import db from './database.js';
-await db.initDB();
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
@@ -374,7 +372,7 @@ setInterval(() => {
       delete subscribers[userId];
       changed = true;
       // Optionnel: avertir l'utilisateur
-      // bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
+       bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
     }
   }
   if (changed) saveSubscribers();
