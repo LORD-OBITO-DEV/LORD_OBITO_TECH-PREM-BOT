@@ -2,6 +2,8 @@ import TelegramBot from 'node-telegram-bot-api';
 import express from 'express';
 import fs from 'fs';
 import crypto from 'crypto';
+import archiver from 'archiver';
+import path from 'path';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
@@ -120,8 +122,11 @@ bot.onText(/\/help/, (msg) => {
 /prem <id> — Donner un abonnement premium
 /unprem <id> — Révoquer un abonnement premium
 /abonnes — Voir la liste des abonnés
+/backup — Télécharger une sauvegarde .zip
+/whitelist <id> — ajouter un utilisateur premium à vie
 `;
-
+  bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
+});
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 // === /codepromo ===
@@ -227,6 +232,37 @@ bot.onText(/\/preuve (.+)/, (msg, match) => {
   if (config.ADMIN_ID) {
     bot.sendMessage(config.ADMIN_ID, `🔔 Nouvelle preuve de paiement de @${username} (ID: ${userId}) :\n${proofText}\nValide avec /valider ${userId}`);
   }
+});
+
+// === /backup (réservé à l’admin) ===
+bot.onText(/\/backup/, (msg) => {
+  const userId = msg.from.id;
+
+  if (!isAdmin(userId)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  const zipPath = './backup.zip';
+  const output = fs.createWriteStream(zipPath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  output.on('close', () => {
+    bot.sendDocument(msg.chat.id, zipPath, {}, {
+      filename: 'backup-premium-bot.zip',
+      contentType: 'application/zip'
+    }).then(() => fs.unlinkSync(zipPath)); // Supprime le zip après envoi
+  });
+
+  archive.on('error', err => {
+    console.error(err);
+    bot.sendMessage(msg.chat.id, '❌ Erreur lors de la création du fichier de sauvegarde.');
+  });
+
+  archive.pipe(output);
+  archive.file(path.resolve('./subscribers.json'), { name: 'subscribers.json' });
+  archive.file(path.resolve('./referrals.json'), { name: 'referrals.json' });
+  archive.file(path.resolve('./pending.json'), { name: 'pending.json' });
+  archive.finalize();
 });
 
 // === /acces ===
