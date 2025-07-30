@@ -363,16 +363,43 @@ bot.onText(/\/abonnes/, (msg) => {
   bot.sendMessage(msg.chat.id, `📋 *Liste des abonnés premium* (${total}) :\n\n${liste}`, { parse_mode: 'Markdown' });
 });
 
+// === Chargement de la whitelist ===
+const whitelistPath = './whitelist.json';
+let whitelist = fs.existsSync(whitelistPath) ? JSON.parse(fs.readFileSync(whitelistPath)) : [];
+
+function saveWhitelist() {
+  fs.writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2));
+}
+
+// === Commande /whitelist <id> ===
+bot.onText(/\/whitelist (\d+)/, (msg, match) => {
+  const adminId = config.ADMIN_ID;
+  if (String(msg.from.id) !== String(adminId)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  const targetId = match[1];
+
+  if (whitelist.includes(targetId)) {
+    return bot.sendMessage(msg.chat.id, `ℹ️ L’utilisateur ${targetId} est déjà dans la whitelist.`);
+  }
+
+  whitelist.push(targetId);
+  saveWhitelist();
+
+  bot.sendMessage(msg.chat.id, `✅ L’utilisateur ${targetId} est ajouté à la whitelist. Il ne sera pas supprimé automatiquement.`);
+  bot.sendMessage(targetId, `✅ Tu es désormais protégé. Ton abonnement ne sera pas supprimé automatiquement.`);
+});
+
 // === Nettoyage abonnés expirés (toutes les heures) ===
 setInterval(() => {
   const now = new Date();
   let changed = false;
   for (const userId in subscribers) {
-    if (new Date(subscribers[userId].expires) < now) {
-      delete subscribers[userId];
-      changed = true;
-      // Optionnel: avertir l'utilisateur
-       bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
+    if (new Date(subscribers[userId].expires) < now && !whitelist.includes(userId)) {
+  delete subscribers[userId];
+  changed = true;
+  bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
     }
   }
   if (changed) saveSubscribers();
