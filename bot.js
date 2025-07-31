@@ -124,6 +124,8 @@ bot.onText(/\/help/, (msg) => {
 /abonnes — Voir la liste des abonnés
 /backup — Télécharger une sauvegarde .zip
 /whitelist <id> — ajouter un utilisateur premium à vie
+/unwhitelist <id> — Retire un utilisateur de la whitelist
+/whitelist_liste — Voir la whitelist actuelle
 `;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
