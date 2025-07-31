@@ -362,7 +362,7 @@ bot.onText(/\/prem (\d+)/, (msg, match) => {
 });
 
 // === /unprem ===
-bot.onText(/\/unprem (\d+)/, (msg, match) => {
+bot.onText(/\/unprem (\d+)/, async (msg, match) => {
   if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
@@ -376,8 +376,15 @@ bot.onText(/\/unprem (\d+)/, (msg, match) => {
   delete subscribers[userId];
   saveSubscribers();
 
-  bot.sendMessage(userId, `⚠️ Ton abonnement premium a été révoqué par l’administrateur.`);
-  bot.sendMessage(msg.chat.id, `✅ Abonnement de l'utilisateur ${userId} révoqué.`);
+  try {
+    await bot.banChatMember(config.CHANNEL_ID, parseInt(userId));
+    await bot.unbanChatMember(config.CHANNEL_ID, parseInt(userId));
+    
+    bot.sendMessage(userId, `⚠️ Ton abonnement a été révoqué et ton accès à la chaîne a été supprimé.`);
+    bot.sendMessage(msg.chat.id, `✅ ${userId} révoqué et retiré de la chaîne.`);
+  } catch (err) {
+    bot.sendMessage(msg.chat.id, `⚠️ Erreur lors du retrait de ${userId} de la chaîne : ${err.message}`);
+  }
 });
 
 // === /abonnes ===
@@ -429,20 +436,64 @@ bot.onText(/\/whitelist (\d+)/, (msg, match) => {
 bot.onText(/\/id/, (msg) => {
   bot.sendMessage(msg.chat.id, `🆔 Chat ID: \`${msg.chat.id}\``, { parse_mode: 'Markdown' });
 });
+// === Commande /unwhitelist <id> ===
+
+bot.onText(/\/unwhitelist (\d+)/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin.');
+  }
+
+  const userId = match[1];
+  if (whitelist.includes(userId)) {
+    whitelist = whitelist.filter(id => id !== userId);
+    saveWhitelist();
+    bot.sendMessage(msg.chat.id, `🗑️ L'utilisateur ${userId} a été retiré de la whitelist.`);
+  } else {
+    bot.sendMessage(msg.chat.id, `ℹ️ L'utilisateur ${userId} n'était pas dans la whitelist.`);
+  }
+});
+
+// === Commande /whitelist_liste ===
+
+bot.onText(/\/whitelist_liste/, (msg) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin.');
+  }
+
+  if (whitelist.length === 0) {
+    return bot.sendMessage(msg.chat.id, '📭 Aucun utilisateur dans la whitelist.');
+  }
+
+  const list = whitelist.map((id, index) => `• ${index + 1}. ID: ${id}`).join('\n');
+  bot.sendMessage(msg.chat.id, `📋 *Whitelist actuelle* :\n\n${list}`, { parse_mode: 'Markdown' });
+});
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
-setInterval(() => {
+setInterval(async () => {
   const now = new Date();
   let changed = false;
+
   for (const userId in subscribers) {
-    if (new Date(subscribers[userId].expires) < now && !whitelist.includes(userId)) {
-  delete subscribers[userId];
-  changed = true;
-  bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
+    const isExpired = new Date(subscribers[userId].expires) < now;
+    const isWhitelisted = whitelist.includes(userId);
+
+    if (isExpired && !isWhitelisted) {
+      try {
+        // Ban & unban pour retirer de la chaîne
+        await bot.banChatMember(config.CHANNEL_ID, parseInt(userId));
+        await bot.unbanChatMember(config.CHANNEL_ID, parseInt(userId));
+        bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
+      } catch (err) {
+        console.error(`❌ Échec suppression de la chaîne pour ${userId} : ${err.message}`);
+      }
+
+      delete subscribers[userId];
+      changed = true;
     }
   }
+
   if (changed) saveSubscribers();
-}, 3600000);
+}, 3600000); // toutes les heures
 
 // === Webhook config ===
 const PORT = process.env.PORT || 3000;
