@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 
 const pendingSchema = new mongoose.Schema({
-  userId: String,
+  userId: { type: String, required: true, unique: true },
   username: String,
   chatId: String,
   proof: String,
