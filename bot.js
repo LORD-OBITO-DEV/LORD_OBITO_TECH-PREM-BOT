@@ -426,6 +426,10 @@ bot.onText(/\/whitelist (\d+)/, (msg, match) => {
   bot.sendMessage(targetId, `✅ Tu es désormais protégé. Ton abonnement ne sera pas supprimé automatiquement.`);
 });
 
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(msg.chat.id, `🆔 Chat ID: \`${msg.chat.id}\``, { parse_mode: 'Markdown' });
+});
+
 // === Nettoyage abonnés expirés (toutes les heures) ===
 setInterval(() => {
   const now = new Date();
