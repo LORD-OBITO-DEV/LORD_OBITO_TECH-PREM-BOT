@@ -14,14 +14,6 @@ function isAdmin(userId) {
 
 const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 
-// id fonction
-
-bot.on('channel_post', (msg) => {
-  const chatId = msg.chat.id;
-  console.log("ID de la chaîne :", chatId);
-  bot.sendMessage(config.ADMIN_ID, `🛰️ ID de la chaîne détecté : \`${chatId}\``, { parse_mode: "Markdown" });
-});
-
 const app = express();
 app.use(express.json());
 
