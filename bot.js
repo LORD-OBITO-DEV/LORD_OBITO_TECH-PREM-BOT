@@ -4,6 +4,10 @@ import fs from 'fs';
 import crypto from 'crypto';
 import archiver from 'archiver';
 import path from 'path';
+import Subscriber from './models/Subscriber.js';
+import Referral from './models/Referral.js';
+import Pending from './models/Pending.js';
+import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
 const mongoUri = config.MONGO_URI;
 
@@ -58,66 +62,100 @@ const whitelistSchema = new mongoose.Schema({
 });
 const Whitelist = mongoose.model('Whitelist', whitelistSchema);
 
-// === Fonctions sauvegarde ===
-function saveSubscribers() {
-  fs.writeFileSync(subscribersPath, JSON.stringify(subscribers, null, 2));
-}
-function savePending() {
-  fs.writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
-}
-function saveReferrals() {
-  fs.writeFileSync(referralsPath, JSON.stringify(referrals, null, 2));
-}
-function getExpirationDate(days = 30) {
-  const now = new Date();
-  now.setDate(now.getDate() + days);
-  return now.toISOString();
-}
-function generateReferralCode() {
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
+// Sauvegarde ou mise à jour d’un abonné
+export async function upsertSubscriber(userId, data) {
+  await Subscriber.findOneAndUpdate(
+    { userId },
+    { $set: data },
+    { upsert: true, new: true }
+  );
 }
 
-// === Commande /start avec parrainage ===
-bot.onText(/\/start(?: (.+))?/, (msg, match) => {
+// Supprime un abonné
+export async function deleteSubscriber(userId) {
+  await Subscriber.deleteOne({ userId });
+}
+
+// Sauvegarde ou mise à jour d’un pending
+export async function upsertPending(userId, data) {
+  await Pending.findOneAndUpdate(
+    { userId },
+    { $set: data },
+    { upsert: true, new: true }
+  );
+}
+
+// Supprime une demande en attente
+export async function deletePending(userId) {
+  await Pending.deleteOne({ userId });
+}
+
+// Sauvegarde ou mise à jour d’un referral
+export async function upsertReferral(userId, data) {
+  await Referral.findOneAndUpdate(
+    { userId },
+    { $set: data },
+    { upsert: true, new: true }
+  );
+}
+
+// === Commande /start avec parrainage (MongoDB) ===
+bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = String(msg.from.id);
   const refCode = match ? match[1] : null;
+  const username = msg.from.username || `ID:${userId}`;
 
+  // ✅ Si l'utilisateur a été invité avec un code
   if (refCode) {
-    const parrains = Object.entries(referrals).filter(([uid, data]) => data.code === refCode);
-    if (parrains.length > 0) {
-      const [parrainId, parrainData] = parrains[0];
-      if (!parrainData.filleuls) parrainData.filleuls = [];
-      if (!parrainData.filleuls.includes(String(userId)) && userId !== Number(parrainId)) {
-        parrainData.filleuls.push(String(userId));
-        referrals[parrainId] = parrainData;
-        saveReferrals();
+    const parrain = await Referral.findOne({ code: refCode });
 
-        // Bonus 1 mois si 3 filleuls atteints
-        if (parrainData.filleuls.length === 3) {
+    if (parrain && parrain.userId !== userId) {
+      if (!parrain.filleuls.includes(userId)) {
+        parrain.filleuls.push(userId);
+        await parrain.save();
+
+        // 🎁 Bonus si 3 filleuls
+        if (parrain.filleuls.length === 3) {
+          let existingSub = await Subscriber.findOne({ userId: parrain.userId });
           let exp = new Date();
-          if (subscribers[parrainId] && new Date(subscribers[parrainId].expires) > new Date()) {
-            exp = new Date(subscribers[parrainId].expires);
-          }
-          exp.setDate(exp.getDate() + 30);
-          subscribers[parrainId] = {
-            username: parrainData.username || `ID:${parrainId}`,
-            expires: exp.toISOString()
-          };
-          saveSubscribers();
 
-          bot.sendMessage(parrainId, `🔥 Bravo ! Tu as 3 filleuls. Ton abonnement premium est prolongé de 1 mois automatiquement !`);
+          if (existingSub && new Date(existingSub.expires) > new Date()) {
+            exp = new Date(existingSub.expires);
+          }
+
+          exp.setDate(exp.getDate() + 30);
+
+          await Subscriber.findOneAndUpdate(
+            { userId: parrain.userId },
+            {
+              userId: parrain.userId,
+              username: parrain.username,
+              expires: exp
+            },
+            { upsert: true }
+          );
+
+          bot.sendMessage(parrain.userId, `🔥 Bravo ! Tu as 3 filleuls. Ton abonnement premium est prolongé de 1 mois automatiquement !`);
         }
       }
     }
   }
 
-  if (!referrals[userId]) {
-    referrals[userId] = { code: generateReferralCode(), filleuls: [] };
-    referrals[userId].username = msg.from.username || `ID:${userId}`;
-    saveReferrals();
+  // ✅ Si l'utilisateur n’a pas encore de code de parrainage
+  const existingReferral = await Referral.findOne({ userId });
+
+  if (!existingReferral) {
+    const newReferral = new Referral({
+      userId,
+      username,
+      code: generateReferralCode(),
+      filleuls: []
+    });
+    await newReferral.save();
   }
 
+  // ✅ Menu d’accueil
   const image = 'https://files.catbox.moe/dsmhrq.jpg';
   const menu = `
 ╔════════════════════
@@ -132,12 +170,15 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
 ╚════════════════════════
 © BY ✞︎ 𝙇𝙊𝙍𝘿 𝙊𝘽𝙄𝙏𝙊 𝘿𝙀𝙑 ✞
 `;
+
   bot.sendPhoto(chatId, image, { caption: menu, parse_mode: "Markdown" });
 });
 
-// === /help ===
-bot.onText(/\/help/, (msg) => {
-  const text = `
+bot.onText(/\/help/, async (msg) => {
+  const userId = String(msg.from.id);
+  const isAdminUser = userId === String(config.ADMIN_ID);
+
+  let text = `
 📌 *Commandes disponibles* :
 
 /start — Démarrer le bot
@@ -147,45 +188,70 @@ bot.onText(/\/help/, (msg) => {
 /mesfilleuls — Liste de tes filleuls
 /promo — Ton lien de parrainage
 /preuve <texte> — Envoyer une preuve de paiement
+`;
 
-👑 Commandes administrateur 👑 :
+  if (isAdminUser) {
+    text += `
+    
+👑 *Commandes administrateur* 👑 :
 /valider <id> — Valider un paiement
 /rejeter <id> <raison> — Rejeter une demande d'accès
 /prem <id> — Donner un abonnement premium
 /unprem <id> — Révoquer un abonnement premium
 /abonnes — Voir la liste des abonnés
 /backup — Télécharger une sauvegarde .zip
-/whitelist <id> — ajouter un utilisateur premium à vie
-/unwhitelist <id> — Retire un utilisateur de la whitelist
+/whitelist <id> — Ajouter un utilisateur premium à vie
+/unwhitelist <id> — Retirer un utilisateur de la whitelist
 /whitelist_liste — Voir la whitelist actuelle
-`;
+    `;
+  }
+
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
 
 // === /codepromo ===
-bot.onText(/\/codepromo/, (msg) => {
-  const userId = msg.from.id;
-  if (!referrals[userId]) {
-    referrals[userId] = { code: generateReferralCode(), filleuls: [] };
-    referrals[userId].username = msg.from.username || `ID:${userId}`;
-    saveReferrals();
+
+bot.onText(/\/codepromo/, async (msg) => {
+  const userId = String(msg.from.id);
+  const username = msg.from.username || `ID:${userId}`;
+
+  let referral = await Referral.findOne({ userId });
+
+  if (!referral) {
+    referral = new Referral({
+      userId,
+      code: crypto.randomBytes(4).toString('hex').toUpperCase(),
+      filleuls: [],
+      username
+    });
+    await referral.save();
   }
-  const code = referrals[userId].code;
-  bot.sendMessage(msg.chat.id, `🎫 Ton code promo : *${code}*\nPartage-le avec /start ${code}`, { parse_mode: "Markdown" });
+
+  const code = referral.code;
+  bot.sendMessage(msg.chat.id, `🎫 Ton code promo : *${code}*\nPartage-le avec /start ${code}`, {
+    parse_mode: "Markdown"
+  });
 });
 
 // === /promo ===
-bot.onText(/\/promo/, (msg) => {
-  const userId = msg.from.id;
-  const username = msg.from.username || null;
 
-  if (!referrals[userId]) {
-    referrals[userId] = { code: generateReferralCode(), filleuls: [] };
-    referrals[userId].username = msg.from.username || `ID:${userId}`;
-    saveReferrals();
+bot.onText(/\/promo/, async (msg) => {
+  const userId = String(msg.from.id);
+  const username = msg.from.username || `ID:${userId}`;
+
+  let referral = await Referral.findOne({ userId });
+
+  if (!referral) {
+    referral = new Referral({
+      userId,
+      code: crypto.randomBytes(4).toString('hex').toUpperCase(),
+      filleuls: [],
+      username
+    });
+    await referral.save();
   }
 
-  const code = referrals[userId].code;
+  const code = referral.code;
   const startLink = username
     ? `https://t.me/${config.BOT_USERNAME}?start=${code}`
     : `Partage ton code avec /start ${code}`;
@@ -195,12 +261,14 @@ bot.onText(/\/promo/, (msg) => {
 });
 
 // === /mesfilleuls ===
-bot.onText(/\/mesfilleuls/, (msg) => {
-  const userId = msg.from.id;
-  const data = referrals[userId];
+bot.onText(/\/mesfilleuls/, async (msg) => {
+  const userId = String(msg.from.id);
+
+  const data = await Referral.findOne({ userId });
   if (!data || !data.filleuls || data.filleuls.length === 0) {
     return bot.sendMessage(msg.chat.id, `😔 Tu n'as pas encore de filleuls.`);
   }
+
   const filleulsList = data.filleuls.map(id => `- ID: ${id}`).join('\n');
   bot.sendMessage(msg.chat.id, `👥 Tu as ${data.filleuls.length} filleuls :\n${filleulsList}`);
 });
@@ -244,8 +312,8 @@ bot.onText(/\/mtn/, (msg) => {
 });
 
 // === /preuve ===
-bot.onText(/\/preuve (.+)/, (msg, match) => {
-  const userId = msg.from.id;
+bot.onText(/\/preuve (.+)/, async (msg, match) => {
+  const userId = String(msg.from.id);
   const proofText = match[1];
   const username = msg.from.username || `ID:${userId}`;
   const chatId = msg.chat.id;
@@ -258,19 +326,23 @@ bot.onText(/\/preuve (.+)/, (msg, match) => {
     return bot.sendMessage(chatId, '❌ Veuillez envoyer une preuve valide après la commande, exemple: /preuve capture écran, reçu, etc.');
   }
 
-  pending[userId] = { username, chatId, proof: proofText, requestedAt: new Date().toISOString() };
-  savePending();
+  // Enregistre dans MongoDB
+  await Pending.findOneAndUpdate(
+    { userId },
+    { username, chatId, proof: proofText, requestedAt: new Date().toISOString() },
+    { upsert: true }
+  );
 
   bot.sendMessage(chatId, `📬 Preuve reçue, l’admin vérifiera et validera la demande.`);
+
   if (config.ADMIN_ID) {
     bot.sendMessage(config.ADMIN_ID, `🔔 Nouvelle preuve de paiement de @${username} (ID: ${userId}) :\n${proofText}\nValide avec /valider ${userId}`);
   }
 });
 
 // === /backup (réservé à l’admin) ===
-bot.onText(/\/backup/, (msg) => {
+bot.onText(/\/backup/, async (msg) => {
   const userId = msg.from.id;
-
   if (!isAdmin(userId)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
@@ -279,11 +351,30 @@ bot.onText(/\/backup/, (msg) => {
   const output = fs.createWriteStream(zipPath);
   const archive = archiver('zip', { zlib: { level: 9 } });
 
+  // Étape 1 : récupérer les données depuis MongoDB
+  const subscribers = await Subscriber.find().lean();
+  const referrals = await Referral.find().lean();
+  const pending = await Pending.find().lean();
+  const whitelist = await Whitelist.find().lean();
+
+  // Étape 2 : sauvegarder temporairement dans des fichiers JSON
+  fs.writeFileSync('./subscribers.json', JSON.stringify(subscribers, null, 2));
+  fs.writeFileSync('./referrals.json', JSON.stringify(referrals, null, 2));
+  fs.writeFileSync('./pending.json', JSON.stringify(pending, null, 2));
+  fs.writeFileSync('./whitelist.json', JSON.stringify(whitelist, null, 2));
+
+  // Étape 3 : créer le ZIP
   output.on('close', () => {
     bot.sendDocument(msg.chat.id, zipPath, {}, {
       filename: 'backup-premium-bot.zip',
       contentType: 'application/zip'
-    }).then(() => fs.unlinkSync(zipPath)); // Supprime le zip après envoi
+    }).then(() => {
+      fs.unlinkSync(zipPath);
+      fs.unlinkSync('./subscribers.json');
+      fs.unlinkSync('./referrals.json');
+      fs.unlinkSync('./pending.json');
+      fs.unlinkSync('./whitelist.json');
+    });
   });
 
   archive.on('error', err => {
@@ -292,15 +383,15 @@ bot.onText(/\/backup/, (msg) => {
   });
 
   archive.pipe(output);
-  archive.file(path.resolve('./data/subscribers.json'), { name: 'subscribers.json' });
-  archive.file(path.resolve('./data/referrals.json'), { name: 'referrals.json' });
-  archive.file(path.resolve('./data/pending.json'), { name: 'pending.json' });
-  archive.file(path.resolve('./data/whitelist.json'), { name: 'whitelist.json' });
+  archive.file('./subscribers.json', { name: 'subscribers.json' });
+  archive.file('./referrals.json', { name: 'referrals.json' });
+  archive.file('./pending.json', { name: 'pending.json' });
+  archive.file('./whitelist.json', { name: 'whitelist.json' });
   archive.finalize();
 });
 
 // === /acces ===
-bot.onText(/\/acces/, (msg) => {
+bot.onText(/\/acces/, async (msg) => {
   const userId = msg.from.id;
   const chatId = msg.chat.id;
 
@@ -308,15 +399,22 @@ bot.onText(/\/acces/, (msg) => {
     return bot.sendMessage(chatId, `✅ Accès illimité administrateur :\n${config.CHANNEL_LINK}`);
   }
 
-  if (subscribers[userId] && new Date(subscribers[userId].expires) > new Date()) {
-    return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
-  }
+  try {
+    const user = await Subscriber.findOne({ userId });
 
-  bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
+    if (user && new Date(user.expires) > new Date()) {
+      return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
+    } else {
+      return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
+    }
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(chatId, `⚠️ Une erreur est survenue lors de la vérification de ton abonnement.`);
+  }
 });
 
 // === /valider ===
-bot.onText(/\/valider (\d+)/, (msg, match) => {
+bot.onText(/\/valider (\d+)/, async (msg, match) => {
   if (String(msg.from.id) !== String(config.ADMIN_ID)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
@@ -330,37 +428,59 @@ bot.onText(/\/valider (\d+)/, (msg, match) => {
     bonus = 30;
   }
 
-  const exp = getExpirationDate(30 + bonus);
-  subscribers[userId] = { username: request.username, expires: exp };
-  saveSubscribers();
+  const exp = new Date();
+  exp.setDate(exp.getDate() + 30 + bonus);
 
-  delete pending[userId];
-  savePending();
+  try {
+    await Subscriber.findOneAndUpdate(
+      { userId },
+      {
+        userId,
+        username: request.username,
+        expires: exp.toISOString()
+      },
+      { upsert: true, new: true }
+    );
 
-  bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien d'accès premium :\n${config.CHANNEL_LINK}`);
-  bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
+    delete pending[userId];
+    savePending();
 
-  if (bonus > 0) {
-    bot.sendMessage(userId, `🎉 Ton abonnement est prolongé de 1 mois grâce à tes 3 filleuls !`);
+    await bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien d'accès premium :\n${config.CHANNEL_LINK}`);
+    await bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
+
+    if (bonus > 0) {
+      await bot.sendMessage(userId, `🎉 Ton abonnement est prolongé de 1 mois grâce à tes 3 filleuls !`);
+    }
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(msg.chat.id, `❌ Une erreur est survenue lors de la validation.`);
   }
 });
 
 // === /rejeter ===
-bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
+bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
   if (String(msg.from.id) !== String(config.ADMIN_ID)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
 
   const userId = match[1];
   const reason = match[2];
-  const request = pending[userId];
-  if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande en attente pour cet ID.`);
 
-  delete pending[userId];
-  savePending();
+  try {
+    const request = await Pending.findOne({ userId });
 
-  bot.sendMessage(request.chatId, `❌ Ta demande d'accès a été rejetée.\nRaison : ${reason}`);
-  bot.sendMessage(msg.chat.id, `✅ Demande de @${request.username} (ID: ${userId}) rejetée.\nRaison : ${reason}`);
+    if (!request) {
+      return bot.sendMessage(msg.chat.id, `❌ Aucune demande en attente pour cet ID.`);
+    }
+
+    await Pending.deleteOne({ userId });
+
+    await bot.sendMessage(request.chatId, `❌ Ta demande d'accès a été rejetée.\nRaison : ${reason}`);
+    await bot.sendMessage(msg.chat.id, `✅ Demande de @${request.username} (ID: ${userId}) rejetée.\nRaison : ${reason}`);
+  } catch (error) {
+    console.error(error);
+    bot.sendMessage(msg.chat.id, `❌ Erreur lors du rejet.`);
+  }
 });
 
 // === /status ===
@@ -381,17 +501,21 @@ bot.onText(/\/status/, async (msg) => {
 });
 
 // === /prem ===
-bot.onText(/\/prem (\d+)/, (msg, match) => {
+bot.onText(/\/prem (\d+)/, async (msg, match) => {
   if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
 
   const userId = match[1];
-  const username = referrals[userId]?.username || `ID:${userId}`;
+  const ref = await Referral.findOne({ userId });
+  const username = ref?.username || `ID:${userId}`;
+  const expires = getExpirationDate(30); // 30 jours
 
-  const exp = getExpirationDate(30); // 30 jours
-  subscribers[userId] = { username, expires: exp };
-  saveSubscribers();
+  await Subscriber.findOneAndUpdate(
+    { userId },
+    { username, expires },
+    { upsert: true, new: true }
+  );
 
   bot.sendMessage(userId, `🎉 Ton abonnement premium a été activé manuellement par l'administrateur.`);
   bot.sendMessage(msg.chat.id, `✅ Premium accordé à ${username}`);
@@ -405,17 +529,17 @@ bot.onText(/\/unprem (\d+)/, async (msg, match) => {
 
   const userId = match[1];
 
-  if (!subscribers[userId]) {
+  const sub = await Subscriber.findOne({ userId });
+  if (!sub) {
     return bot.sendMessage(msg.chat.id, `ℹ️ Cet utilisateur n’a pas d’abonnement actif.`);
   }
 
-  delete subscribers[userId];
-  saveSubscribers();
+  await Subscriber.deleteOne({ userId });
 
   try {
     await bot.banChatMember(config.CHANNEL_ID, parseInt(userId));
     await bot.unbanChatMember(config.CHANNEL_ID, parseInt(userId));
-    
+
     bot.sendMessage(userId, `⚠️ Ton abonnement a été révoqué et ton accès à la chaîne a été supprimé.`);
     bot.sendMessage(msg.chat.id, `✅ ${userId} révoqué et retiré de la chaîne.`);
   } catch (err) {
@@ -424,33 +548,29 @@ bot.onText(/\/unprem (\d+)/, async (msg, match) => {
 });
 
 // === /abonnes ===
-bot.onText(/\/abonnes/, (msg) => {
+bot.onText(/\/abonnes/, async (msg) => {
   if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
 
-  const total = Object.keys(subscribers).length;
+  const abonnés = await Subscriber.find({});
+  const total = abonnés.length;
+
   if (total === 0) {
     return bot.sendMessage(msg.chat.id, '📭 Aucun abonné premium pour le moment.');
   }
 
-  const liste = Object.entries(subscribers)
-    .map(([id, sub]) => `• ${sub.username} (ID: ${id})\n  Expires: ${new Date(sub.expires).toLocaleDateString()}`)
-    .join('\n\n');
+  const liste = abonnés.map(sub => {
+    const date = new Date(sub.expires).toLocaleDateString();
+    return `• ${sub.username} (ID: ${sub.userId})\n  Expires: ${date}`;
+  }).join('\n\n');
 
-  bot.sendMessage(msg.chat.id, `📋 *Liste des abonnés premium* (${total}) :\n\n${liste}`, { parse_mode: 'Markdown' });
+  const message = `📋 *Liste des abonnés premium* (${total}) :\n\n${liste}`;
+  bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
 });
 
-// === Chargement de la whitelist ===
-const whitelistPath = './whitelist.json';
-let whitelist = fs.existsSync(whitelistPath) ? JSON.parse(fs.readFileSync(whitelistPath)) : [];
-
-function saveWhitelist() {
-  fs.writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2));
-}
-
 // === Commande /whitelist <id> ===
-bot.onText(/\/whitelist (\d+)/, (msg, match) => {
+bot.onText(/\/whitelist (\d+)/, async (msg, match) => {
   const adminId = config.ADMIN_ID;
   if (String(msg.from.id) !== String(adminId)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
@@ -458,77 +578,70 @@ bot.onText(/\/whitelist (\d+)/, (msg, match) => {
 
   const targetId = match[1];
 
-  if (whitelist.includes(targetId)) {
+  const exist = await Whitelist.findOne({ userId: targetId });
+  if (exist) {
     return bot.sendMessage(msg.chat.id, `ℹ️ L’utilisateur ${targetId} est déjà dans la whitelist.`);
   }
 
-  whitelist.push(targetId);
-  saveWhitelist();
+  await Whitelist.create({ userId: targetId });
 
-  bot.sendMessage(msg.chat.id, `✅ L’utilisateur ${targetId} est ajouté à la whitelist. Il ne sera pas supprimé automatiquement.`);
+  bot.sendMessage(msg.chat.id, `✅ L’utilisateur ${targetId} est ajouté à la whitelist.`);
   bot.sendMessage(targetId, `✅ Tu es désormais protégé. Ton abonnement ne sera pas supprimé automatiquement.`);
-});
-
-bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(msg.chat.id, `🆔 Chat ID: \`${msg.chat.id}\``, { parse_mode: 'Markdown' });
 });
 // === Commande /unwhitelist <id> ===
 
-bot.onText(/\/unwhitelist (\d+)/, (msg, match) => {
-  if (!isAdmin(msg.from.id)) {
-    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin.');
+bot.onText(/\/unwhitelist (\d+)/, async (msg, match) => {
+  const adminId = config.ADMIN_ID;
+  if (String(msg.from.id) !== String(adminId)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
 
-  const userId = match[1];
-  if (whitelist.includes(userId)) {
-    whitelist = whitelist.filter(id => id !== userId);
-    saveWhitelist();
-    bot.sendMessage(msg.chat.id, `🗑️ L'utilisateur ${userId} a été retiré de la whitelist.`);
-  } else {
-    bot.sendMessage(msg.chat.id, `ℹ️ L'utilisateur ${userId} n'était pas dans la whitelist.`);
+  const targetId = match[1];
+
+  const result = await Whitelist.findOneAndDelete({ userId: targetId });
+  if (!result) {
+    return bot.sendMessage(msg.chat.id, `❌ Utilisateur ${targetId} non trouvé dans la whitelist.`);
   }
+
+  bot.sendMessage(msg.chat.id, `✅ L’utilisateur ${targetId} a été retiré de la whitelist.`);
 });
 
 // === Commande /whitelist_liste ===
 
-bot.onText(/\/whitelist_liste/, (msg) => {
+bot.onText(/\/whitelist_liste/, async (msg) => {
   if (!isAdmin(msg.from.id)) {
-    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin.');
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
   }
 
-  if (whitelist.length === 0) {
-    return bot.sendMessage(msg.chat.id, '📭 Aucun utilisateur dans la whitelist.');
+  const list = await Whitelist.find({});
+  if (list.length === 0) {
+    return bot.sendMessage(msg.chat.id, '📭 Aucune entrée dans la whitelist.');
   }
 
-  const list = whitelist.map((id, index) => `• ${index + 1}. ID: ${id}`).join('\n');
-  bot.sendMessage(msg.chat.id, `📋 *Whitelist actuelle* :\n\n${list}`, { parse_mode: 'Markdown' });
+  const texte = list.map(item => `• ID: ${item.userId}`).join('\n');
+  bot.sendMessage(msg.chat.id, `📋 *Whitelist actuelle* :\n\n${texte}`, { parse_mode: 'Markdown' });
 });
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
+
 setInterval(async () => {
   const now = new Date();
-  let changed = false;
+  const expiredSubscribers = await Subscriber.find({ expires: { $lt: now } });
 
-  for (const userId in subscribers) {
-    const isExpired = new Date(subscribers[userId].expires) < now;
-    const isWhitelisted = whitelist.includes(userId);
+  for (const sub of expiredSubscribers) {
+    const isWhitelisted = await Whitelist.findOne({ userId: sub.userId });
+    if (isWhitelisted) continue;
 
-    if (isExpired && !isWhitelisted) {
-      try {
-        // Ban & unban pour retirer de la chaîne
-        await bot.banChatMember(config.CHANNEL_ID, parseInt(userId));
-        await bot.unbanChatMember(config.CHANNEL_ID, parseInt(userId));
-        bot.sendMessage(userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
-      } catch (err) {
-        console.error(`❌ Échec suppression de la chaîne pour ${userId} : ${err.message}`);
-      }
-
-      delete subscribers[userId];
-      changed = true;
+    try {
+      await bot.banChatMember(config.CHANNEL_ID, parseInt(sub.userId));
+      await bot.unbanChatMember(config.CHANNEL_ID, parseInt(sub.userId));
+      await bot.sendMessage(sub.userId, "⏰ Ton abonnement premium a expiré. Merci de renouveler avec /abonnement.");
+    } catch (err) {
+      console.error(`❌ Échec suppression pour ${sub.userId} : ${err.message}`);
     }
-  }
 
-  if (changed) saveSubscribers();
+    await Subscriber.deleteOne({ userId: sub.userId });
+  }
 }, 3600000); // toutes les heures
 
 // === Webhook config ===
