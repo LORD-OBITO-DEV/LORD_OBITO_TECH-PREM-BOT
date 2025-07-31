@@ -1,7 +1,8 @@
+// models/Subscriber.js
 import mongoose from 'mongoose';
 
 const subscriberSchema = new mongoose.Schema({
-  userId: String,
+  userId: { type: String, required: true, unique: true },
   username: String,
   expires: String
 });
