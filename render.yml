@@ -1,8 +1,31 @@
 services:
   - type: web
-    name: telegram-premium-bot
+    name: lord-obito-tech-prem-bot
     env: node
-    buildCommand: npm install
-    startCommand: npm start
-    autoDeploy: true
     plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: BOT_TOKEN
+        value: 8239865435:AAHHqCMGN7379xIjIDmlPPiDCM2GdVLOkI8
+      - key: ADMIN_ID
+        value: '6587556123'
+      - key: CHANNEL_ID
+        value: '-1002856361614'
+      - key: CHANNEL_LINK
+        value: https://t.me/+chjZIks8n3M2Mzdk
+      - key: BOT_USERNAME
+        value: LORD_OBITO_TECH_PREM_BOT
+      - key: WEBHOOK_URL
+        value: https://lord-obito-tech-prem-bot.onrender.com
+      - key: PAYPAL_LINK
+        value: https://www.paypal.me/4413396713991763
+      - key: WAVE_NUMBER
+        value: +2250712668494
+      - key: OM_NUMBER
+        value: +2250712668494
+      - key: MTN_NUMBER
+        value: +2250504219934
+      - key: MONGO_URI
+        value: mongodb+srv://LORD_OBITO_BOT:QWERTY304@cluster0.5dev5wf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
