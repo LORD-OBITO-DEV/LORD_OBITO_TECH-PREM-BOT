@@ -127,8 +127,7 @@ bot.onText(/\/help/, (msg) => {
 `;
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
 });
-  bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
-});
+
 // === /codepromo ===
 bot.onText(/\/codepromo/, (msg) => {
   const userId = msg.from.id;
