@@ -18,9 +18,9 @@ const app = express();
 app.use(express.json());
 
 // === Fichiers JSON ===
-const subscribersPath = './subscribers.json';
-const pendingPath = './pending.json';
-const referralsPath = './referrals.json';
+const subscribersPath = './data/subscribers.json';
+const pendingPath = './data/pending.json';
+const referralsPath = './data/referrals.json';
 
 let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(subscribersPath)) : {};
 let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
@@ -258,9 +258,10 @@ bot.onText(/\/backup/, (msg) => {
   });
 
   archive.pipe(output);
-  archive.file(path.resolve('./subscribers.json'), { name: 'subscribers.json' });
-  archive.file(path.resolve('./referrals.json'), { name: 'referrals.json' });
-  archive.file(path.resolve('./pending.json'), { name: 'pending.json' });
+  archive.file(path.resolve('./data/subscribers.json'), { name: 'subscribers.json' });
+  archive.file(path.resolve('./data/referrals.json'), { name: 'referrals.json' });
+  archive.file(path.resolve('./data/pending.json'), { name: 'pending.json' });
+  archive.file(path.resolve('./data/whitelist.json'), { name: 'whitelist.json' });
   archive.finalize();
 });
 
