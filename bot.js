@@ -4,6 +4,17 @@ import fs from 'fs';
 import crypto from 'crypto';
 import archiver from 'archiver';
 import path from 'path';
+import mongoose from 'mongoose';
+const mongoUri = config.MONGO_URI;
+
+mongoose.connect(mongoUri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('✅ Connecté à MongoDB Atlas');
+}).catch(err => {
+  console.error('❌ Erreur de connexion MongoDB:', err);
+});
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
@@ -18,13 +29,34 @@ const app = express();
 app.use(express.json());
 
 // === Fichiers JSON ===
-const subscribersPath = './data/subscribers.json';
-const pendingPath = './data/pending.json';
-const referralsPath = './data/referrals.json';
+const subscriberSchema = new mongoose.Schema({
+  userId: String,
+  username: String,
+  expires: Date
+});
+const Subscriber = mongoose.model('Subscriber', subscriberSchema);
 
-let subscribers = fs.existsSync(subscribersPath) ? JSON.parse(fs.readFileSync(subscribersPath)) : {};
-let pending = fs.existsSync(pendingPath) ? JSON.parse(fs.readFileSync(pendingPath)) : {};
-let referrals = fs.existsSync(referralsPath) ? JSON.parse(fs.readFileSync(referralsPath)) : {};
+const referralSchema = new mongoose.Schema({
+  userId: String,
+  username: String,
+  code: String,
+  filleuls: [String]
+});
+const Referral = mongoose.model('Referral', referralSchema);
+
+const pendingSchema = new mongoose.Schema({
+  userId: String,
+  username: String,
+  chatId: Number,
+  proof: String,
+  requestedAt: Date
+});
+const Pending = mongoose.model('Pending', pendingSchema);
+
+const whitelistSchema = new mongoose.Schema({
+  userId: String
+});
+const Whitelist = mongoose.model('Whitelist', whitelistSchema);
 
 // === Fonctions sauvegarde ===
 function saveSubscribers() {
@@ -332,15 +364,16 @@ bot.onText(/\/rejeter (\d+) (.+)/, (msg, match) => {
 });
 
 // === /status ===
-bot.onText(/\/status/, (msg) => {
+bot.onText(/\/status/, async (msg) => {
   const userId = msg.from.id;
 
   if (isAdmin(userId)) {
     return bot.sendMessage(msg.chat.id, `👑 Statut : *ADMIN - Accès illimité*`, { parse_mode: 'Markdown' });
   }
 
-  const sub = subscribers[userId];
-  if (sub && new Date(sub.expires) > new Date()) {
+  const sub = await Subscriber.findOne({ userId: String(userId) });
+
+  if (sub && sub.expires > new Date()) {
     return bot.sendMessage(msg.chat.id, `✅ Abonnement actif jusqu’au : *${new Date(sub.expires).toLocaleString()}*`, { parse_mode: 'Markdown' });
   } else {
     return bot.sendMessage(msg.chat.id, `❌ Ton abonnement est expiré ou non activé.`);
