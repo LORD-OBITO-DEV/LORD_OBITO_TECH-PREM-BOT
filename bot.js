@@ -415,8 +415,20 @@ bot.onText(/\/acces/, async (msg) => {
       await invite.save();
     }
 
-    return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
+    const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
 
+// Sauvegarde message ID
+await Invite.findOneAndUpdate(
+  { userId },
+  {
+    userId,
+    inviteLink: invite.inviteLink,
+    messageId: sent.message_id,
+    chatId
+  },
+  { upsert: true }
+);
+    
   } catch (err) {
     console.error(err);
     bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
