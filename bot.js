@@ -419,34 +419,7 @@ bot.onText(/\/acces/, async (msg) => {
         ]]
       }
     });
-    
-  // === Callback bouton "J’ai rejoint la chaîne" ===
-bot.on('callback_query', async (query) => {
-  const userId = String(query.from.id);
 
-  if (query.data === 'joined_channel') {
-    const invite = await Invite.findOne({ userId });
-
-    if (invite && invite.chatId && invite.messageId) {
-      try {
-        await bot.deleteMessage(invite.chatId, invite.messageId);
-        await Invite.deleteOne({ userId });
-
-        await bot.answerCallbackQuery(query.id, {
-          text: "✅ Lien supprimé. Bienvenue dans la chaîne !",
-          show_alert: false
-        });
-
-        await bot.sendMessage(userId, "🎉 Accès confirmé !");
-      } catch (err) {
-        console.error(`❌ Erreur suppression message : ${err.message}`);
-        await bot.answerCallbackQuery(query.id, { text: "❌ Erreur lors de la suppression du message." });
-      }
-    } else {
-      await bot.answerCallbackQuery(query.id, { text: "Lien déjà supprimé ou inexistant." });
-    }
-  }
-});
     // Sauvegarde ou mise à jour du message
     await Invite.findOneAndUpdate(
       { userId },
@@ -742,6 +715,38 @@ setInterval(async () => {
     }
   }
 }, 3600000);
+
+// === Callback bouton "J’ai rejoint la chaîne" ===
+bot.on('callback_query', async (query) => {
+  const userId = String(query.from.id);
+
+  if (query.data === 'joined_channel') {
+    const invite = await Invite.findOne({ userId });
+
+    if (invite && invite.chatId && invite.messageId) {
+      try {
+        await bot.deleteMessage(invite.chatId, invite.messageId);
+        await Invite.deleteOne({ userId });
+
+        await bot.answerCallbackQuery(query.id, {
+          text: "✅ Lien supprimé. Bienvenue dans la chaîne !",
+          show_alert: false
+        });
+
+        await bot.sendMessage(userId, "🎉 Accès confirmé !");
+      } catch (err) {
+        console.error(`❌ Erreur suppression message : ${err.message}`);
+        await bot.answerCallbackQuery(query.id, {
+          text: "❌ Erreur lors de la suppression du message."
+        });
+      }
+    } else {
+      await bot.answerCallbackQuery(query.id, {
+        text: "❌ Lien déjà supprimé ou inexistant."
+      });
+    }
+  }
+});
 
 // === Webhook config ===
 const PORT = process.env.PORT || 3000;
