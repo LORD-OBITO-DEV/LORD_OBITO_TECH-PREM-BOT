@@ -4,4 +4,5 @@ const whitelistSchema = new mongoose.Schema({
   userId: String
 });
 
-export default mongoose.model('Whitelist', whitelistSchema);
+const Whitelist = mongoose.model('Whitelist', whitelistSchema);
+export default Whitelist;
