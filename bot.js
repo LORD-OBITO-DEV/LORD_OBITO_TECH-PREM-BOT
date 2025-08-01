@@ -384,7 +384,7 @@ bot.onText(/\/backup/, async (msg) => {
 
 // === /acces ===
 bot.onText(/\/acces/, async (msg) => {
-  const userId = msg.from.id;
+  const userId = String(msg.from.id);
   const chatId = msg.chat.id;
 
   if (isAdmin(userId)) {
@@ -394,14 +394,32 @@ bot.onText(/\/acces/, async (msg) => {
   try {
     const user = await Subscriber.findOne({ userId });
 
-    if (user && new Date(user.expires) > new Date()) {
-      return bot.sendMessage(chatId, `✅ Tu as déjà accès :\n${config.CHANNEL_LINK}`);
-    } else {
+    if (!user || new Date(user.expires) < new Date()) {
       return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
     }
+
+    // Cherche un lien déjà généré
+    let invite = await Invite.findOne({ userId });
+
+    if (!invite) {
+      const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
+        member_limit: 1,
+        creates_join_request: false
+      });
+
+      invite = new Invite({
+        userId,
+        inviteLink: inviteLinkData.invite_link
+      });
+
+      await invite.save();
+    }
+
+    return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
+
   } catch (err) {
     console.error(err);
-    bot.sendMessage(chatId, `⚠️ Une erreur est survenue lors de la vérification de ton abonnement.`);
+    bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
   }
 });
 
@@ -412,7 +430,45 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
   }
 
   const userId = match[1];
-  const request = await Pending.findOne({ userId });
+  const request = await Pendingbot.onText(/\/acces/, async (msg) => {
+  const userId = String(msg.from.id);
+  const chatId = msg.chat.id;
+
+  if (isAdmin(userId)) {
+    return bot.sendMessage(chatId, `✅ Accès illimité administrateur :\n${config.CHANNEL_LINK}`);
+  }
+
+  try {
+    const user = await Subscriber.findOne({ userId });
+
+    if (!user || new Date(user.expires) < new Date()) {
+      return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
+    }
+
+    // Cherche un lien déjà généré
+    let invite = await Invite.findOne({ userId });
+
+    if (!invite) {
+      const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
+        member_limit: 1,
+        creates_join_request: false
+      });
+
+      invite = new Invite({
+        userId,
+        inviteLink: inviteLinkData.invite_link
+      });
+
+      await invite.save();
+    }
+
+    return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
+
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
+  }
+});.findOne({ userId });
 
   if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande pour cet ID.`);
 
@@ -637,6 +693,7 @@ bot.onText(/\/whitelist_liste/, async (msg) => {
 });
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
+
 setInterval(async () => {
   const now = new Date();
   const expiredSubscribers = await Subscriber.find({ expires: { $lt: now } });
@@ -646,23 +703,31 @@ setInterval(async () => {
     if (isWhitelisted) continue;
 
     try {
-      // Révoquer l'accès à la chaîne
+      // Supprime le membre de la chaîne
       await bot.banChatMember(config.CHANNEL_ID, parseInt(sub.userId));
       await bot.unbanChatMember(config.CHANNEL_ID, parseInt(sub.userId));
 
-      // Informer l'utilisateur
-      await bot.sendMessage(sub.userId, `⏰ Ton abonnement premium a expiré. Merci de renouveler via /abonnement.`);
-      await bot.sendMessage(sub.userId, `🔒 Ton lien d’accès a été désactivé car ton abonnement est expiré.`);
+      // Supprime le lien d'invitation associé
+      const invite = await Invite.findOne({ userId: sub.userId });
+      if (invite) {
+        const allLinks = await bot.getChatInviteLinks(config.CHANNEL_ID);
+        const matching = allLinks.find(link => link.invite_link === invite.inviteLink);
+        if (matching) {
+          await bot.revokeChatInviteLink(config.CHANNEL_ID, matching.invite_link);
+        }
+        await Invite.deleteOne({ userId: sub.userId });
+      }
 
-      // Supprimer l'entrée dans la base
+      // Supprime l'utilisateur de Mongo
       await Subscriber.deleteOne({ userId: sub.userId });
 
-      console.log(`✅ ${sub.userId} supprimé des abonnés et retiré de la chaîne.`);
+      await bot.sendMessage(sub.userId, "⏰ Ton abonnement premium a expiré. Ton accès a été désactivé. Renouvelle via /abonnement.");
+
     } catch (err) {
-      console.error(`❌ Erreur pour ${sub.userId} : ${err.message}`);
+      console.error(`❌ Erreur lors du nettoyage de ${sub.userId} : ${err.message}`);
     }
   }
-}, 3600000); // Toutes les heures
+}, 3600000); // chaque heure
 
 // === Webhook config ===
 const PORT = process.env.PORT || 3000;
