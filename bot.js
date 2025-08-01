@@ -411,10 +411,16 @@ bot.onText(/\/acces/, async (msg) => {
       inviteLink = inviteLinkData.invite_link;
     }
 
-    // Envoie le lien et récupère le message
-    const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${inviteLink}`);
+    // Envoie du lien + bouton "J’ai rejoint"
+    const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${inviteLink}`, {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "✅ J’ai rejoint la chaîne", callback_data: "joined_channel" }
+        ]]
+      }
+    });
 
-    // Met à jour ou crée une nouvelle entrée avec le message_id
+    // Sauvegarde ou mise à jour du message
     await Invite.findOneAndUpdate(
       { userId },
       {
@@ -431,6 +437,7 @@ bot.onText(/\/acces/, async (msg) => {
     bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
   }
 });
+
 
  // === /valider <id> ===
 bot.onText(/\/valider (\d+)/, async (msg, match) => {
