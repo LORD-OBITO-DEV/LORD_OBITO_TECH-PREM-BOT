@@ -156,29 +156,27 @@ bot.onText(/\/help/, async (msg) => {
   let text = `
 📌 *Commandes disponibles* :
 
-/start — Démarrer le bot
-/abonnement — Voir les moyens de paiement
-/status — Vérifier ton abonnement
-/codepromo — Voir ton code promo
-/mesfilleuls — Liste de tes filleuls
-/promo — Ton lien de parrainage
-/preuve <texte> — Envoyer une preuve de paiement
-`;
+/start — Démarrer le bot  
+/abonnement — Voir les moyens de paiement  
+/status — Vérifier ton abonnement  
+/codepromo — Voir ton code promo  
+/mesfilleuls — Liste de tes filleuls  
+/promo — Ton lien de parrainage  
+/preuve <texte> — Envoyer une preuve de paiement`;
 
   if (isAdminUser) {
     text += `
-    
-👑 *Commandes administrateur* 👑 :
-/valider <id> — Valider un paiement
-/rejeter <id> <raison> — Rejeter une demande d'accès
-/prem <id> — Donner un abonnement premium
-/unprem <id> — Révoquer un abonnement premium
-/abonnes — Voir la liste des abonnés
-/backup — Télécharger une sauvegarde .zip
-/whitelist <id> — Ajouter un utilisateur premium à vie
-/unwhitelist <id> — Retirer un utilisateur de la whitelist
-/whitelist_liste — Voir la whitelist actuelle
-    `;
+
+👑 *Commandes administrateur* 👑  
+/valider <id> — Valider un paiement  
+/rejeter <id> <raison> — Rejeter une demande d'accès  
+/prem <id> — Donner un abonnement premium  
+/unprem <id> — Révoquer un abonnement premium  
+/abonnes — Voir la liste des abonnés  
+/backup — Télécharger une sauvegarde .zip  
+/whitelist <id> — Ajouter un utilisateur premium à vie  
+/unwhitelist <id> — Retirer un utilisateur de la whitelist  
+/whitelist_liste — Voir la whitelist actuelle`;
   }
 
   bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
