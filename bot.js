@@ -419,7 +419,34 @@ bot.onText(/\/acces/, async (msg) => {
         ]]
       }
     });
+    
+  // === Callback bouton "J’ai rejoint la chaîne" ===
+bot.on('callback_query', async (query) => {
+  const userId = String(query.from.id);
 
+  if (query.data === 'joined_channel') {
+    const invite = await Invite.findOne({ userId });
+
+    if (invite && invite.chatId && invite.messageId) {
+      try {
+        await bot.deleteMessage(invite.chatId, invite.messageId);
+        await Invite.deleteOne({ userId });
+
+        await bot.answerCallbackQuery(query.id, {
+          text: "✅ Lien supprimé. Bienvenue dans la chaîne !",
+          show_alert: false
+        });
+
+        await bot.sendMessage(userId, "🎉 Accès confirmé !");
+      } catch (err) {
+        console.error(`❌ Erreur suppression message : ${err.message}`);
+        await bot.answerCallbackQuery(query.id, { text: "❌ Erreur lors de la suppression du message." });
+      }
+    } else {
+      await bot.answerCallbackQuery(query.id, { text: "Lien déjà supprimé ou inexistant." });
+    }
+  }
+});
     // Sauvegarde ou mise à jour du message
     await Invite.findOneAndUpdate(
       { userId },
@@ -471,25 +498,11 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
   await Pending.deleteOne({ userId });
 
   // 🔔 Message utilisateur avec bouton
-  await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.`, {
-    reply_markup: {
-      inline_keyboard: [[
-        { text: "🔓 Accéder à la chaîne", callback_data: "acces" }
-      ]]
-    }
-  });
+  await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.\n\nFais /acces pour accéder à tes fonctions premium 👑`);
 
   // 🔔 Notification admin
   await bot.sendMessage(msg.chat.id, `✅ Abonnement validé pour @${username} (ID: ${userId})`);
 });
-
-// === Callback bouton "Accès"
-bot.on("callback_query", async (query) => {
-  const userId = String(query.from.id);
-  if (query.data === "acces") {
-    bot.sendMessage(userId, `/acces`);
-  }
-});  
 
 // === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
