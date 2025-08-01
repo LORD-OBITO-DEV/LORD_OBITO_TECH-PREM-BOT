@@ -10,6 +10,13 @@ import Pending from './models/Pending.js';
 import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
 
+// 🟢 Charger d'abord le fichier de configuration
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
+// 🟢 Ensuite initialiser mongoUri
+const mongoUri = config.MONGO_URI;
+
+// 🟢 Maintenant tu peux te connecter à MongoDB
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -18,9 +25,6 @@ mongoose.connect(mongoUri, {
 }).catch(err => {
   console.error('❌ Erreur de connexion MongoDB:', err);
 });
-
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-const mongoUri = config.MONGO_URI;
 
 // ✅ Fonction manquante ajoutée ici
 function isAdmin(userId) {
