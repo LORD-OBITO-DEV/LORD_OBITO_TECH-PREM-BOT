@@ -399,20 +399,30 @@ bot.onText(/\/acces/, async (msg) => {
     }
 
     let invite = await Invite.findOne({ userId });
-    let inviteLink = invite?.inviteLink;
 
-    // Si pas encore généré, on le crée
-    if (!inviteLink) {
-      const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
-  member_limit: 1,
-  creates_join_request: false,
-  expire_date: Math.floor(Date.now() / 1000) + 3600 // expire dans 1h
-});
-
-      inviteLink = inviteLinkData.invite_link;
+    // 🔍 Vérifie si le lien est encore valable
+    const now = new Date();
+    if (invite && invite.expiresAt && new Date(invite.expiresAt) > now) {
+      return bot.sendMessage(chatId, `✅ Voici ton lien d’accès encore valide :\n${invite.inviteLink}`, {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "✅ J’ai rejoint la chaîne", callback_data: "joined_channel" }
+          ]]
+        }
+      });
     }
 
-    // Envoie du lien + bouton "J’ai rejoint"
+    // 🔗 Crée un nouveau lien (valable 1h)
+    const expireTimestamp = Math.floor(Date.now() / 1000) + 3600; // +1h en secondes
+    const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
+      member_limit: 1,
+      creates_join_request: false,
+      expire_date: expireTimestamp
+    });
+
+    const inviteLink = inviteLinkData.invite_link;
+
+    // 📤 Envoie le lien
     const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${inviteLink}`, {
       reply_markup: {
         inline_keyboard: [[
@@ -421,14 +431,15 @@ bot.onText(/\/acces/, async (msg) => {
       }
     });
 
-    // Sauvegarde ou mise à jour du message
+    // 💾 Sauvegarde ou mise à jour en base
     await Invite.findOneAndUpdate(
       { userId },
       {
         userId,
-        inviteLink: inviteLink,
+        inviteLink,
         messageId: sent.message_id,
-        chatId: chatId
+        chatId,
+        expiresAt: new Date(Date.now() + 3600 * 1000) // Date d’expiration JS
       },
       { upsert: true }
     );
