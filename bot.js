@@ -444,72 +444,31 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
     if (!user || new Date(user.expires) < new Date()) {
       return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
     }
+    
+// Cherche un lien déjà généré
+let invite = await Invite.findOne({ userId });
 
-    // Cherche un lien déjà généré
-    let invite = await Invite.findOne({ userId });
+if (!invite) {
+  const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
+    member_limit: 1,
+    creates_join_request: false
+  });
 
-    if (!invite) {
-      const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
-        member_limit: 1,
-        creates_join_request: false
-      });
+  invite = new Invite({
+    userId,
+    inviteLink: inviteLinkData.invite_link
+  });
 
-      invite = new Invite({
-        userId,
-        inviteLink: inviteLinkData.invite_link
-      });
+  await invite.save();
+}
 
-      await invite.save();
-    }
+return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
 
-    return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
-
-  } catch (err) {
-    console.error(err);
-    bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
+} catch (err) {
+  console.error(err);
+  bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
   }
-});.findOne({ userId });
-
-  if (!request) return bot.sendMessage(msg.chat.id, `❌ Aucune demande pour cet ID.`);
-
-  let bonus = 0;
-  const referral = await Referral.findOne({ userId });
-  if (referral?.filleuls?.length >= 3) bonus = 30;
-
-  const exp = new Date();
-  exp.setDate(exp.getDate() + 30 + bonus);
-
-  try {
-    // Générer un lien d'invitation temporaire
-    const invite = await bot.createChatInviteLink(config.CHANNEL_ID, {
-      member_limit: 1,
-      expire_date: Math.floor(exp.getTime() / 1000)
-    });
-
-    await Subscriber.findOneAndUpdate(
-      { userId },
-      {
-        userId,
-        username: request.username,
-        expires: exp,
-        inviteLink: invite.invite_link
-      },
-      { upsert: true, new: true }
-    );
-
-    await Pending.deleteOne({ userId });
-
-    await bot.sendMessage(request.chatId, `✅ Paiement confirmé ! Voici ton lien d'accès premium :\n${invite.invite_link}`);
-    await bot.sendMessage(msg.chat.id, `✅ Validé pour @${request.username}`);
-
-    if (bonus > 0) {
-      await bot.sendMessage(userId, `🎉 Ton abonnement est prolongé de 1 mois grâce à tes 3 filleuls !`);
-    }
-  } catch (err) {
-    console.error(err);
-    bot.sendMessage(msg.chat.id, `❌ Une erreur est survenue lors de la validation : ${err.message}`);
-  }
-});
+   
 
 // === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
