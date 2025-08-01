@@ -9,6 +9,7 @@ import Referral from './models/Referral.js';
 import Pending from './models/Pending.js';
 import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
+import Invite from './models/Invite.js';
 
 function getExpirationDate(days) {
   const date = new Date();
