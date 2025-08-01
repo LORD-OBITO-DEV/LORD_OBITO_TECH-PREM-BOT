@@ -423,52 +423,37 @@ bot.onText(/\/acces/, async (msg) => {
   }
 });
 
-// === /valider ===
+ // === /valider <id> ===
 bot.onText(/\/valider (\d+)/, async (msg, match) => {
   if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’admin');
   }
 
   const userId = match[1];
-  const request = await Pendingbot.onText(/\/acces/, async (msg) => {
-  const userId = String(msg.from.id);
-  const chatId = msg.chat.id;
+  const request = await Pending.findOne({ userId });
 
-  if (isAdmin(userId)) {
-    return bot.sendMessage(chatId, `✅ Accès illimité administrateur :\n${config.CHANNEL_LINK}`);
+  if (!request) {
+    return bot.sendMessage(msg.chat.id, `❌ Aucune demande de paiement trouvée pour cet ID.`);
   }
 
-  try {
-    const user = await Subscriber.findOne({ userId });
+  const expires = getExpirationDate(30); // 30 jours d'abonnement
+  await Subscriber.findOneAndUpdate(
+    { userId },
+    {
+      username: request.username,
+      expires
+    },
+    { upsert: true }
+  );
 
-    if (!user || new Date(user.expires) < new Date()) {
-      return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
-    }
-    
-// Cherche un lien déjà généré
-let invite = await Invite.findOne({ userId });
+  await Pending.deleteOne({ userId });
 
-if (!invite) {
-  const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
-    member_limit: 1,
-    creates_join_request: false
-  });
+  // Message à l'utilisateur
+  await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.\nClique sur /acces pour rejoindre la chaîne.`);
 
-  invite = new Invite({
-    userId,
-    inviteLink: inviteLinkData.invite_link
-  });
-
-  await invite.save();
-}
-
-return bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
-
-} catch (err) {
-  console.error(err);
-  bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
-  }
-   
+  // Confirmation à l’admin
+  await bot.sendMessage(msg.chat.id, `✅ Abonnement validé pour @${request.username} (ID: ${userId})`);
+});  
 
 // === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
