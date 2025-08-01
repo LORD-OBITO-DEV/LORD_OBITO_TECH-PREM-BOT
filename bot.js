@@ -33,44 +33,6 @@ const app = express();
 app.use(express.json());
 
 // === Fichiers JSON ===
-const subscriberSchema = new mongoose.Schema({
-  userId: String,
-  username: String,
-  expires: Date
-});
-const Subscriber = mongoose.model('Subscriber', subscriberSchema);
-
-const referralSchema = new mongoose.Schema({
-  userId: String,
-  username: String,
-  code: String,
-  filleuls: [String]
-});
-const Referral = mongoose.model('Referral', referralSchema);
-
-const pendingSchema = new mongoose.Schema({
-  userId: String,
-  username: String,
-  chatId: Number,
-  proof: String,
-  requestedAt: Date
-});
-const Pending = mongoose.model('Pending', pendingSchema);
-
-const whitelistSchema = new mongoose.Schema({
-  userId: String
-});
-const Whitelist = mongoose.model('Whitelist', whitelistSchema);
-
-// Sauvegarde ou mise à jour d’un abonné
-export async function upsertSubscriber(userId, data) {
-  await Subscriber.findOneAndUpdate(
-    { userId },
-    { $set: data },
-    { upsert: true, new: true }
-  );
-}
-
 // Supprime un abonné
 export async function deleteSubscriber(userId) {
   await Subscriber.deleteOne({ userId });
