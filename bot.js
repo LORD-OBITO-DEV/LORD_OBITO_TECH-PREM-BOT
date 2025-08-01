@@ -430,23 +430,50 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
   }
 
   const userId = match[1];
+
+  // ✅ Empêche la validation si déjà abonné
+  const existingSub = await Subscriber.findOne({ userId });
+  if (existingSub && new Date(existingSub.expires) > new Date()) {
+    return bot.sendMessage(msg.chat.id, `⚠️ L'utilisateur ${userId} a déjà un abonnement actif jusqu'au ${new Date(existingSub.expires).toLocaleString()}`);
+  }
+
   const request = await Pending.findOne({ userId });
 
   if (!request) {
     return bot.sendMessage(msg.chat.id, `❌ Aucune demande de paiement trouvée pour cet ID.`);
   }
 
-  const expires = getExpirationDate(30); // 30 jours d'abonnement
+  const username = request.username || `ID:${userId}`;
+  const expires = getExpirationDate(30); // 30 jours
+
   await Subscriber.findOneAndUpdate(
     { userId },
-    {
-      username: request.username,
-      expires
-    },
+    { username, expires },
     { upsert: true }
   );
 
   await Pending.deleteOne({ userId });
+
+  // 🔔 Message utilisateur avec bouton
+  await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.`, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: "🔓 Accéder à la chaîne", callback_data: "acces" }
+      ]]
+    }
+  });
+
+  // 🔔 Notification admin
+  await bot.sendMessage(msg.chat.id, `✅ Abonnement validé pour @${username} (ID: ${userId})`);
+});
+
+// === Callback bouton "Accès"
+bot.on("callback_query", async (query) => {
+  const userId = String(query.from.id);
+  if (query.data === "acces") {
+    bot.sendMessage(userId, `/acces`);
+  }
+});
 
   // Message à l'utilisateur
   await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.\nClique sur /acces pour rejoindre la chaîne.`);
