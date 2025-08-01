@@ -668,7 +668,7 @@ setInterval(async () => {
 
     try {
       // Supprime le membre de la chaîne
-      await bot.banChatMember(config.CHANNEL_ID, parseInt(sub.userId));
+      await bot.kickChatMember(config.CHANNEL_ID, parseInt(sub.userId)); 
       await bot.unbanChatMember(config.CHANNEL_ID, parseInt(sub.userId));
 
       // Supprime le lien d'invitation associé
