@@ -404,9 +404,10 @@ bot.onText(/\/acces/, async (msg) => {
     // Si pas encore généré, on le crée
     if (!inviteLink) {
       const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
-        member_limit: 1,
-        creates_join_request: false
-      });
+  member_limit: 1,
+  creates_join_request: false,
+  expire_date: Math.floor(Date.now() / 1000) + 3600 // expire dans 1h
+});
 
       inviteLink = inviteLinkData.invite_link;
     }
