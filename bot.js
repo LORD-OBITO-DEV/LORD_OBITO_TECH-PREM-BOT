@@ -398,37 +398,34 @@ bot.onText(/\/acces/, async (msg) => {
       return bot.sendMessage(chatId, `❌ Ton abonnement est expiré ou non activé.\nMerci de payer 1000 FCFA via /abonnement.\nEnvoie ta preuve avec /preuve`);
     }
 
-    // Cherche un lien déjà généré
     let invite = await Invite.findOne({ userId });
+    let inviteLink = invite?.inviteLink;
 
-    if (!invite) {
+    // Si pas encore généré, on le crée
+    if (!inviteLink) {
       const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
         member_limit: 1,
         creates_join_request: false
       });
 
-      invite = new Invite({
-        userId,
-        inviteLink: inviteLinkData.invite_link
-      });
-
-      await invite.save();
+      inviteLink = inviteLinkData.invite_link;
     }
 
-    const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${invite.inviteLink}`);
+    // Envoie le lien et récupère le message
+    const sent = await bot.sendMessage(chatId, `✅ Voici ton lien d’accès privé :\n${inviteLink}`);
 
-// Sauvegarde message ID
-await Invite.findOneAndUpdate(
-  { userId },
-  {
-    userId,
-    inviteLink: invite.inviteLink,
-    messageId: sent.message_id,
-    chatId
-  },
-  { upsert: true }
-);
-    
+    // Met à jour ou crée une nouvelle entrée avec le message_id
+    await Invite.findOneAndUpdate(
+      { userId },
+      {
+        userId,
+        inviteLink: inviteLink,
+        messageId: sent.message_id,
+        chatId: chatId
+      },
+      { upsert: true }
+    );
+
   } catch (err) {
     console.error(err);
     bot.sendMessage(chatId, `⚠️ Une erreur est survenue.`);
@@ -679,31 +676,52 @@ setInterval(async () => {
     if (isWhitelisted) continue;
 
     try {
-      // Supprime le membre de la chaîne
-      await bot.kickChatMember(config.CHANNEL_ID, parseInt(sub.userId)); 
+      // ❌ Supprime de la chaîne
+      await bot.banChatMember(config.CHANNEL_ID, parseInt(sub.userId));
       await bot.unbanChatMember(config.CHANNEL_ID, parseInt(sub.userId));
 
-      // Supprime le lien d'invitation associé
+      // 📩 Supprime le message contenant le lien s’il existe
       const invite = await Invite.findOne({ userId: sub.userId });
+
       if (invite) {
-        const allLinks = await bot.getChatInviteLinks(config.CHANNEL_ID);
-        const matching = allLinks.find(link => link.invite_link === invite.inviteLink);
-        if (matching) {
-          await bot.revokeChatInviteLink(config.CHANNEL_ID, matching.invite_link);
+        if (invite.chatId && invite.messageId) {
+          try {
+            await bot.deleteMessage(invite.chatId, invite.messageId);
+          } catch (err) {
+            console.warn(`⚠️ Erreur suppression message (${sub.userId}) : ${err.message}`);
+          }
         }
+
+        // 🔗 Révocation du lien
+        try {
+          const allLinks = await bot.getChatInviteLinks(config.CHANNEL_ID);
+          const matching = allLinks.find(link => link.invite_link === invite.inviteLink);
+          if (matching) {
+            await bot.revokeChatInviteLink(config.CHANNEL_ID, matching.invite_link);
+          }
+        } catch (err) {
+          console.warn(`⚠️ Erreur révocation du lien (${sub.userId}) : ${err.message}`);
+        }
+
         await Invite.deleteOne({ userId: sub.userId });
       }
 
-      // Supprime l'utilisateur de Mongo
+      // 🧹 Nettoyage
       await Subscriber.deleteOne({ userId: sub.userId });
 
+      // ✅ Message à l’utilisateur
       await bot.sendMessage(sub.userId, "⏰ Ton abonnement premium a expiré. Ton accès a été désactivé. Renouvelle via /abonnement.");
 
+      // 📬 Notifie l’admin
+      await bot.sendMessage(config.ADMIN_ID, `📤 *Abonnement expiré* :\n• ID: ${sub.userId}\n• Username: ${sub.username || 'N/A'}\n⛔ Lien d’accès et abonnement supprimés.`, {
+        parse_mode: 'Markdown'
+      });
+
     } catch (err) {
-      console.error(`❌ Erreur lors du nettoyage de ${sub.userId} : ${err.message}`);
+      console.error(`❌ Erreur nettoyage (${sub.userId}) : ${err.message}`);
     }
   }
-}, 3600000); // chaque heure
+}, 3600000);
 
 // === Webhook config ===
 const PORT = process.env.PORT || 3000;
