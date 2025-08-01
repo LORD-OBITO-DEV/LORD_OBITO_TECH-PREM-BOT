@@ -10,6 +10,15 @@ import Pending from './models/Pending.js';
 import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
 
+function generateReferralCode(length = 8) {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return code;
+}
+
 // 🟢 Charger d'abord le fichier de configuration
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
