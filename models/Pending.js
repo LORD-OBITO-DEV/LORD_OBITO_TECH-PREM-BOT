@@ -2,11 +2,12 @@
 import mongoose from 'mongoose';
 
 const pendingSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
+  userId: String,
   username: String,
-  chatId: String,
+  chatId: Number,
   proof: String,
-  requestedAt: String
+  requestedAt: Date
 });
 
-export default mongoose.model('Pending', pendingSchema);
+const Pending = mongoose.model('Pending', pendingSchema);
+export default Pending;
