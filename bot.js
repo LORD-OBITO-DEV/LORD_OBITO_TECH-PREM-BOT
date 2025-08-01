@@ -677,23 +677,31 @@ bot.onText(/\/nettoie_liens/, async (msg) => {
   }
 
   try {
-    const inviteLinks = await bot.getChatInviteLinks(config.CHANNEL_ID, { limit: 100 });
+    const now = new Date();
+    const expiredLinks = await Invite.find({
+      createdAt: { $lte: new Date(now.getTime() - 60 * 60 * 1000) } // plus vieux que 1h
+    });
 
     let count = 0;
 
-    for (const link of inviteLinks) {
-      if (link.member_limit === 1 && link.usage_count === 0) {
-        await bot.revokeChatInviteLink(config.CHANNEL_ID, link.invite_link);
+    for (const invite of expiredLinks) {
+      try {
+        await bot.revokeChatInviteLink(config.CHANNEL_ID, invite.inviteLink);
+        await Invite.deleteOne({ _id: invite._id });
         count++;
+      } catch (err) {
+        console.error(`Erreur suppression du lien ${invite.inviteLink}:`, err.message);
       }
     }
 
-    bot.sendMessage(msg.chat.id, `✅ ${count} liens d'invitation inutilisés ont été supprimés.`);
+    bot.sendMessage(msg.chat.id, `🧹 ${count} liens d’invitation expirés ont été supprimés.`);
+
   } catch (err) {
-    console.error(err);
-    bot.sendMessage(msg.chat.id, '❌ Erreur lors du nettoyage des liens.');
+    console.error('❌ Erreur pendant le nettoyage :', err.message);
+    bot.sendMessage(msg.chat.id, '❌ Une erreur est survenue lors du nettoyage.');
   }
 });
+    
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
 
