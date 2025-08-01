@@ -658,6 +658,31 @@ bot.onText(/\/whitelist_liste/, async (msg) => {
   bot.sendMessage(msg.chat.id, `📋 *Whitelist actuelle* :\n\n${texte}`, { parse_mode: 'Markdown' });
 });
 
+// === Nettoyage liens expirés
+bot.onText(/\/nettoie_liens/, async (msg) => {
+  if (!isAdmin(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, '⛔ Commande réservée à l’administrateur.');
+  }
+
+  try {
+    const inviteLinks = await bot.getChatInviteLinks(config.CHANNEL_ID, { limit: 100 });
+
+    let count = 0;
+
+    for (const link of inviteLinks) {
+      if (link.member_limit === 1 && link.usage_count === 0) {
+        await bot.revokeChatInviteLink(config.CHANNEL_ID, link.invite_link);
+        count++;
+      }
+    }
+
+    bot.sendMessage(msg.chat.id, `✅ ${count} liens d'invitation inutilisés ont été supprimés.`);
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(msg.chat.id, '❌ Erreur lors du nettoyage des liens.');
+  }
+});
+
 // === Nettoyage abonnés expirés (toutes les heures) ===
 
 setInterval(async () => {
