@@ -473,13 +473,6 @@ bot.on("callback_query", async (query) => {
   if (query.data === "acces") {
     bot.sendMessage(userId, `/acces`);
   }
-});
-
-  // Message à l'utilisateur
-  await bot.sendMessage(request.chatId, `✅ Ta preuve a été validée ! Ton abonnement premium est actif pour 30 jours.\nClique sur /acces pour rejoindre la chaîne.`);
-
-  // Confirmation à l’admin
-  await bot.sendMessage(msg.chat.id, `✅ Abonnement validé pour @${request.username} (ID: ${userId})`);
 });  
 
 // === /rejeter ===
