@@ -9,7 +9,6 @@ import Referral from './models/Referral.js';
 import Pending from './models/Pending.js';
 import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
-const mongoUri = config.MONGO_URI;
 
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
@@ -21,6 +20,7 @@ mongoose.connect(mongoUri, {
 });
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const mongoUri = config.MONGO_URI;
 
 // ✅ Fonction manquante ajoutée ici
 function isAdmin(userId) {
