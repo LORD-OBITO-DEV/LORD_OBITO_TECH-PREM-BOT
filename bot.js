@@ -179,7 +179,7 @@ bot.onText(/\/help/, async (msg) => {
 /whitelist_liste — Voir la whitelist actuelle`;
   }
 
-  bot.sendMessage(msg.chat.id, text, { parse_mode: "Markdown" });
+  bot.sendMessage(msg.chat.id, text, { parse_mode: "HTML" });
 });
 
 // === /codepromo ===
