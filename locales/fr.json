@@ -58,5 +58,6 @@
   "whitelist_removed": "✅ L’utilisateur {id} a été retiré de la whitelist.",
   "whitelist_empty": "📭 Aucune entrée dans la whitelist.",
   "whitelist_current": "Whitelist actuelle",
-  "clean_links_done": "🧹 {count} liens d’invitation expirés ont été supprimés."
+  "clean_links_done": "🧹 {count} liens d’invitation expirés ont été supprimés.",
+  "choose_lang": "🌍 Choose your language:"
 }
