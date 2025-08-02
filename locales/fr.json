@@ -59,5 +59,9 @@
   "whitelist_empty": "📭 Aucune entrée dans la whitelist.",
   "whitelist_current": "Whitelist actuelle",
   "clean_links_done": "🧹 {count} liens d’invitation expirés ont été supprimés.",
-  "choose_lang": "🌍 Choose your language:"
+  "choose_lang": "🌍 Choose your language:",
+  "stats_title": "Statistiques",
+  "stats_subs": "Abonnés premium",
+  "stats_refs": "Références créées",
+  "stats_pending": "En attente de validation"
 }
