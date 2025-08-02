@@ -33,9 +33,9 @@ function generateReferralCode(length = 8) {
   return code;
 }
 
-// === fonction getUserLang ===
+// === fonction getUserLang (unique et correcte) ===
 async function getUserLang(userId, fallback = 'fr') {
-  const user = await Referral.findOne({ userId }); // ou User si tu en as un
+  const user = await User.findOne({ userId });
   return (user && user.lang) || fallback;
 }
 
