@@ -721,42 +721,45 @@ bot.onText(/\/infos/, async (msg) => {
   bot.sendMessage(msg.chat.id, infos, { parse_mode: 'Markdown' });
 });
 
-// === Nettoyage liens expirés
+// === Nettoyage des liens expirés
 bot.onText(/\/nettoie_liens/, async (msg) => {
   const lang = msg.from.language_code || 'fr';
-  const chatId = msg.chat.id;
 
   if (!isAdmin(msg.from.id)) {
-    return bot.sendMessage(chatId, t(lang, 'admin_only'));
+    return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
+
+  const chatId = msg.chat.id;
 
   try {
     const now = new Date();
-    const expiredLinks = await Invite.find({
-      createdAt: { $lte: new Date(now.getTime() - 60 * 60 * 1000) } // > 1h
-    });
+    const heureAvant = new Date(now.getTime() - 60 * 60 * 1000); // liens créés il y a plus d'1h
 
-    let count = 0;
+    const expiredLinks = await Invite.find({ createdAt: { $lte: heureAvant } });
+
+    console.log(`[NETTOYAGE] ${expiredLinks.length} lien(s) trouvé(s) à supprimer`);
+
+    let deletedCount = 0;
 
     for (const invite of expiredLinks) {
       try {
+        console.log(`➡️ Tentative suppression : ${invite.inviteLink}`);
         await bot.revokeChatInviteLink(config.CHANNEL_ID, invite.inviteLink);
         await Invite.deleteOne({ _id: invite._id });
-        count++;
+        console.log(`✅ Lien supprimé : ${invite.inviteLink}`);
+        deletedCount++;
       } catch (err) {
-        console.error(`Erreur suppression du lien ${invite.inviteLink}:`, err.message);
+        console.error(`❌ Erreur suppression du lien ${invite.inviteLink}:`, err.message);
       }
     }
 
-    bot.sendMessage(chatId, t(lang, 'clean_links_done').replace('{count}', count.toString()));
-
-  } catch (err) {
-    console.error('❌ Erreur pendant le nettoyage :', err.message);
-    bot.sendMessage(chatId, t(lang, 'error_occurred'));
-  }
-});
-
+    return bot.sendMessage(chatId, t(lang, 'clean_links_done').replace('{count}', deletedCount));
     
+  } catch (err) {
+    console.error('❌ Erreur globale pendant le nettoyage :', err.message);
+    return bot.sendMessage(chatId, t(lang, 'error_occurred'));
+  }
+});   
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
 
