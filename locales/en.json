@@ -59,5 +59,9 @@
   "whitelist_empty": "📭 No entries in the whitelist.",
   "whitelist_current": "Current whitelist",
   "clean_links_done": "🧹 {count} expired invite links removed.",
-  "choose_lang": "🌍 Choose your language:"
+  "choose_lang": "🌍 Choose your language:",
+  "stats_title": "Statistics",
+  "stats_subs": "Premium subscribers",
+  "stats_refs": "Referral codes created",
+  "stats_pending": "Pending payments"
 }
