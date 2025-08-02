@@ -11,6 +11,7 @@ import Whitelist from './models/Whitelist.js';
 import mongoose from 'mongoose';
 import Invite from './models/Invite.js';
 import { t } from './i18n.js'; // importer la fonction t()
+import User from './models/User.js';
 
 function getLang(msg) {
   const langCode = msg.from?.language_code || 'fr';
@@ -331,21 +332,21 @@ bot.onText(/\/preuve(?: (.+))?/, async (msg, match) => {
 
 // === /lang ===
 bot.onText(/\/lang/, async (msg) => {
-  const chatId = msg.chat.id;
-  const lang = msg.from.language_code || 'fr';
+  const userId = String(msg.from.id);
+  const currentLang = msg.from.language_code?.startsWith('en') ? 'en' : 'fr';
 
-  const keyboard = {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "🇫🇷 Français", callback_data: "lang_fr" },
-          { text: "🇬🇧 English", callback_data: "lang_en" }
-        ]
-      ]
-    }
-  };
+  try {
+    await User.findOneAndUpdate(
+      { userId },
+      { userId, lang: currentLang },
+      { upsert: true }
+    );
 
-  bot.sendMessage(chatId, t(lang, 'choose_lang'), keyboard);
+    await bot.sendMessage(msg.chat.id, t(currentLang, 'lang_updated'));
+  } catch (err) {
+    console.error(`❌ Erreur changement langue : ${err.message}`);
+    await bot.sendMessage(msg.chat.id, t(currentLang, 'error_occurred'));
+  }
 });
 
 // === /backup (réservé à l’admin) ===
