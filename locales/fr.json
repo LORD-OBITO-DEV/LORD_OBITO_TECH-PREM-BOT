@@ -63,5 +63,9 @@
   "stats_title": "Statistiques",
   "stats_subs": "Abonnés premium",
   "stats_refs": "Références créées",
-  "stats_pending": "En attente de validation"
+  "stats_pending": "En attente de validation",
+  "promo_code": "Code promo",
+  "not_active": "Non actif",
+  "none": "Aucun",
+  "until": "jusqu’au"
 }
