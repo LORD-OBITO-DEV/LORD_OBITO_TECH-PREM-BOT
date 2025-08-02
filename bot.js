@@ -836,37 +836,69 @@ setInterval(async () => {
   }
 }, 3600000); // toutes les heures
 
-// === Callback bouton "J’ai rejoint la chaîne" ===
+// === Callback: bouton "J’ai rejoint la chaîne" + /lang
 bot.on('callback_query', async (query) => {
   const userId = String(query.from.id);
   const lang = query.from.language_code || 'fr';
+  const chatId = query.message.chat.id;
 
+  // 1️⃣ Callback pour le bouton "J’ai rejoint la chaîne"
   if (query.data === 'joined_channel') {
     const invite = await Invite.findOne({ userId });
 
     if (invite && invite.chatId && invite.messageId) {
       try {
-        // Supprimer le message avec le lien
+        // Supprimer le message contenant le lien
         await bot.deleteMessage(invite.chatId, invite.messageId);
         await Invite.deleteOne({ userId });
 
-        // Répondre à l'appui du bouton
         await bot.answerCallbackQuery(query.id, {
-          text: t(lang, 'link_deleted'), // ✅ Lien supprimé. Bienvenue dans la chaîne !
+          text: t(lang, 'link_deleted'),
           show_alert: false
         });
 
-        // Message privé
-        await bot.sendMessage(userId, t(lang, 'joined_success')); // 🎉 Accès confirmé !
+        await bot.sendMessage(userId, t(lang, 'joined_success'));
       } catch (err) {
         console.error(`❌ Erreur suppression message : ${err.message}`);
         await bot.answerCallbackQuery(query.id, {
-          text: t(lang, 'error_occurred') // ❌ Une erreur est survenue
+          text: t(lang, 'error_occurred'),
+          show_alert: true
         });
       }
     } else {
       await bot.answerCallbackQuery(query.id, {
-        text: t(lang, 'no_pending') // ❌ Lien déjà supprimé ou inexistant.
+        text: t(lang, 'no_pending'),
+        show_alert: true
+      });
+    }
+
+  // 2️⃣ Callback pour changer la langue
+  } else if (query.data.startsWith("lang_")) {
+    const newLang = query.data.split("_")[1];
+
+    try {
+      await User.findOneAndUpdate(
+        { userId },
+        { lang: newLang },
+        { upsert: true }
+      );
+
+      const confirmMsg = newLang === 'fr'
+        ? "✅ Langue définie sur *Français*."
+        : "✅ Language set to *English*.";
+
+      await bot.editMessageText(confirmMsg, {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: "Markdown"
+      });
+
+      await bot.answerCallbackQuery(query.id); // Ferme l'animation de chargement
+    } catch (err) {
+      console.error("❌ Erreur changement langue :", err.message);
+      await bot.answerCallbackQuery(query.id, {
+        text: t(lang, 'error_occurred'),
+        show_alert: true
       });
     }
   }
