@@ -65,7 +65,7 @@ Une fois le paiement effectué, l’utilisateur envoie sa preuve via `/preuve` e
 ## 👑 Créateur
 
 Développé avec ❤️ par **LORD-OBITO-DEV**  
-WhatsApp: +2250712668494  
+WhatsApp: Wa.me//2250712668494  
 GitHub: [LORD-OBITO-DEV](https://github.com/LORD-OBITO-DEV)
 
 ---
