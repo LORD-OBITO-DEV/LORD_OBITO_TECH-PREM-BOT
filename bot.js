@@ -266,11 +266,6 @@ bot.onText(/\/abonnement/, async (msg) => {
 });
 
 // Moyens de paiement
-const getUserLang = async (userId, fallbackLang) => {
-  const user = await User.findOne({ userId });
-  return user?.lang || fallbackLang || 'fr';
-};
-
 bot.onText(/\/paypal/, async (msg) => {
   const lang = await getUserLang(msg.from.id, msg.from.language_code);
   const text = t(lang, 'paypal_text').replace('{link}', config.PAYPAL_LINK);
