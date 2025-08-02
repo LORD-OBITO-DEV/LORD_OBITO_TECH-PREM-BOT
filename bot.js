@@ -316,6 +316,25 @@ bot.onText(/\/preuve(?: (.+))?/, async (msg, match) => {
   }
 });
 
+// === /lang ===
+bot.onText(/\/lang/, async (msg) => {
+  const chatId = msg.chat.id;
+  const lang = msg.from.language_code || 'fr';
+
+  const keyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "🇫🇷 Français", callback_data: "lang_fr" },
+          { text: "🇬🇧 English", callback_data: "lang_en" }
+        ]
+      ]
+    }
+  };
+
+  bot.sendMessage(chatId, t(lang, 'choose_lang'), keyboard);
+});
+
 // === /backup (réservé à l’admin) ===
 bot.onText(/\/backup/, async (msg) => {
   const userId = String(msg.from.id);
