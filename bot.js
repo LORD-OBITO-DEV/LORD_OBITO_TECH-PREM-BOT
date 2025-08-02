@@ -722,39 +722,34 @@ bot.onText(/\/infos/, async (msg) => {
 });
 
 // === Nettoyage liens expirés
-bot.onText(/\/nettoie_liens/, async (msg) => {
-  const lang = msg.from.language_code || 'fr';
 
-  if (!isAdmin(msg.from.id)) {
+    bot.onText(/\/nettoie_liens/, async (msg) => {
+  const lang = msg.from.language_code || 'fr';
+  const adminId = config.ADMIN_ID;
+
+  if (String(msg.from.id) !== String(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
-  try {
-    const now = new Date();
-    const expiredLinks = await Invite.find({
-      createdAt: { $lte: new Date(now.getTime() - 60 * 60 * 1000) } // > 1h
-    });
+  const chatId = msg.chat.id; // ✅ définir chatId ici
 
+  try {
+    const invites = await bot.getChatInviteLinks(config.CHANNEL_ID);
     let count = 0;
 
-    for (const invite of expiredLinks) {
-      try {
-        await bot.revokeChatInviteLink(config.CHANNEL_ID, invite.inviteLink);
-        await Invite.deleteOne({ _id: invite._id });
+    for (const invite of invites) {
+      if (invite.expire_date && invite.expire_date * 1000 < Date.now()) {
+        await bot.revokeChatInviteLink(config.CHANNEL_ID, invite.invite_link);
         count++;
-      } catch (err) {
-        console.error(`Erreur suppression du lien ${invite.inviteLink}:`, err.message);
       }
     }
 
-    bot.sendMessage(chatId, t(lang, 'clean_links_done').replace('{count}', deletedCount));
-
-  } catch (err) {
-    console.error('❌ Erreur pendant le nettoyage :', err.message);
-    bot.sendMessage(msg.chat.id, t(lang, 'error_occurred'));
+    bot.sendMessage(chatId, t(lang, 'clean_links_done').replace('{count}', count));
+  } catch (e) {
+    console.error("❌ Erreur pendant le nettoyage :", e.message);
+    bot.sendMessage(chatId, "❌ Une erreur est survenue pendant le nettoyage.");
   }
 });
-    
 
 // === Nettoyage abonnés expirés (toutes les heures) ===
 
