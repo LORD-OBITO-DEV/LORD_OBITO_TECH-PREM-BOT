@@ -747,7 +747,7 @@ bot.onText(/\/nettoie_liens/, async (msg) => {
       }
     }
 
-    bot.sendMessage(msg.chat.id, t(lang, 'clean_links_done', { count }));
+    bot.sendMessage(chatId, t(lang, 'clean_links_done').replace('{count}', deletedCount));
 
   } catch (err) {
     console.error('❌ Erreur pendant le nettoyage :', err.message);
