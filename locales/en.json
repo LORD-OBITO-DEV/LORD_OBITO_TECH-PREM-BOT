@@ -63,5 +63,9 @@
   "stats_title": "Statistics",
   "stats_subs": "Premium subscribers",
   "stats_refs": "Referral codes created",
-  "stats_pending": "Pending payments"
+  "stats_pending": "Pending payments",
+  "promo_code": "Promo code",
+  "not_active": "Not active",
+  "none": "None",
+  "until": "until"
 }
