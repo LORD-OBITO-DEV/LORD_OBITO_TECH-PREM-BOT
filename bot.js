@@ -341,7 +341,7 @@ bot.onText(/\/backup/, async (msg) => {
     fs.writeFileSync('./whitelist.json', JSON.stringify(whitelist, null, 2));
 
     // Étape 3 : Créer le zip
-    const zipPath = './backup.zip';
+    const zipPath = './𝑩𝒂𝒄𝒌𝒖𝒑_𝑷𝒓𝒆𝒎-𝒃𝒐𝒕.zip';
     const output = fs.createWriteStream(zipPath);
     const archive = archiver('zip', { zlib: { level: 9 } });
 
@@ -356,7 +356,7 @@ bot.onText(/\/backup/, async (msg) => {
     output.on('close', async () => {
       await bot.sendDocument(msg.chat.id, zipPath, {
         caption: t(lang, 'backup_success'),
-        filename: 'backup-premium-bot.zip',
+        filename: '𝑩𝒂𝒄𝒌𝒖𝒑_𝑷𝒓𝒆𝒎-𝒃𝒐𝒕.zip',
         contentType: 'application/zip'
       });
 
