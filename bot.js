@@ -326,22 +326,18 @@ bot.onText(/\/preuve(?: (.+))?/, async (msg, match) => {
 });
 
 // === /lang ===
-bot.onText(/\/lang/, async (msg) => {
+bot.onText(/\/lang (fr|en)/, async (msg, match) => {
   const userId = String(msg.from.id);
-  const currentLang = msg.from.language_code?.startsWith('en') ? 'en' : 'fr';
+  const lang = match[1];
 
-  try {
-    await User.findOneAndUpdate(
-      { userId },
-      { userId, lang: currentLang },
-      { upsert: true }
-    );
+  await User.findOneAndUpdate(
+    { userId },
+    { userId, lang },
+    { upsert: true }
+  );
 
-    await bot.sendMessage(msg.chat.id, t(currentLang, 'lang_updated'));
-  } catch (err) {
-    console.error(`❌ Erreur changement langue : ${err.message}`);
-    await bot.sendMessage(msg.chat.id, t(currentLang, 'error_occurred'));
-  }
+  const confirmation = lang === 'fr' ? '✅ Langue mise à jour en *Français*' : '✅ Language updated to *English*';
+  bot.sendMessage(msg.chat.id, confirmation, { parse_mode: 'Markdown' });
 });
 
 // === /backup (réservé à l’admin) ===
