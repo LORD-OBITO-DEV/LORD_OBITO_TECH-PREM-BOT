@@ -98,9 +98,11 @@ export async function upsertReferral(userId, data) {
 bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = String(msg.from.id);
-  const lang = msg.from.language_code || 'fr'; // Détection de langue
-  const refCode = match ? match[1] : null;
   const username = msg.from.username || `ID:${userId}`;
+  const refCode = match ? match[1] : null;
+
+  // 🟢 Détecter la langue via base de données
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   // Si l'utilisateur a été invité avec un code
   if (refCode) {
@@ -162,7 +164,7 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
 // === /help ===
 bot.onText(/\/help/, async (msg) => {
   const userId = String(msg.from.id);
-  const lang = (await User.findOne({ userId }))?.lang || msg.from.language_code || 'fr';
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   let text = t(lang, 'help_base');
 
@@ -179,7 +181,7 @@ bot.onText(/\/help/, async (msg) => {
 bot.onText(/\/codepromo/, async (msg) => {
   const userId = String(msg.from.id);
   const username = msg.from.username || `ID:${userId}`;
-  const lang = (await User.findOne({ userId }))?.lang || msg.from.language_code || 'fr';
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   let referral = await Referral.findOne({ userId });
 
@@ -205,8 +207,7 @@ bot.onText(/\/codepromo/, async (msg) => {
 bot.onText(/\/promo/, async (msg) => {
   const userId = String(msg.from.id);
   const username = msg.from.username || `ID:${userId}`;
-
-  const lang = (await User.findOne({ userId }))?.lang || msg.from.language_code || 'fr';
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   let referral = await Referral.findOne({ userId });
 
@@ -221,7 +222,6 @@ bot.onText(/\/promo/, async (msg) => {
   }
 
   const code = referral.code;
-
   const startLink = `https://t.me/${config.BOT_USERNAME}?start=${code}`;
   const message = `${t(lang, 'invite_friends')}\n${startLink}\n\n${t(lang, 'free_month_reward')}`;
 
@@ -231,12 +231,10 @@ bot.onText(/\/promo/, async (msg) => {
 // === /mesfilleuls ===
 bot.onText(/\/mesfilleuls/, async (msg) => {
   const userId = String(msg.from.id);
-
-  // Langue stockée dans la base si disponible
-  const user = await User.findOne({ userId });
-  const lang = user?.lang || msg.from.language_code || 'fr';
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   const data = await Referral.findOne({ userId });
+
   if (!data || !Array.isArray(data.filleuls) || data.filleuls.length === 0) {
     return bot.sendMessage(msg.chat.id, t(lang, 'no_referrals'));
   }
@@ -251,6 +249,24 @@ bot.onText(/\/abonnement/, async (msg) => {
   const userId = String(msg.from.id);
   const user = await User.findOne({ userId });
   const lang = user?.lang || msg.from.language_code || 'fr';
+
+  if (isAdmin(userId)) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'admin_no_payment_needed'));
+  }
+
+  const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
+  const message = t(lang, 'subscription_message');
+
+  bot.sendPhoto(msg.chat.id, imageURL, {
+    caption: message,
+    parse_mode: "Markdown"
+  });
+});
+
+// Moyens de paiement
+bot.onText(/\/abonnement/, async (msg) => {
+  const userId = String(msg.from.id);
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   if (isAdmin(userId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_no_payment_needed'));
@@ -377,28 +393,28 @@ bot.onText(/\/backup/, async (msg) => {
 
     await archive.finalize();
 
-    output.on('close', async () => {
-      await bot.sendDocument(msg.chat.id, zipPath, {
-        caption: t(lang, 'backup_success'),
-        filename: '𝑩𝒂𝒄𝒌𝒖𝒑_𝑷𝒓𝒆𝒎-𝒃𝒐𝒕.zip',
-        contentType: 'application/zip'
-      });
-
-      // Nettoyage des fichiers temporaires
-      fs.unlinkSync('./subscribers.json');
-      fs.unlinkSync('./referrals.json');
-      fs.unlinkSync('./pending.json');
-      fs.unlinkSync('./whitelist.json');
-      fs.unlinkSync(zipPath);
+    // 🟡 Attendre que le fichier soit bien fermé
+    await new Promise((resolve, reject) => {
+      output.on('close', resolve);
+      archive.on('error', reject);
     });
 
-    archive.on('error', (err) => {
-      console.error('Erreur archive:', err);
-      bot.sendMessage(msg.chat.id, t(lang, 'zip_error'));
+    // Étape 4 : Envoi à l’admin
+    await bot.sendDocument(msg.chat.id, zipPath, {
+      caption: t(lang, 'backup_success'),
+      filename: '𝑩𝒂𝒄𝒌𝒖𝒑_𝑷𝒓𝒆𝒎-𝒃𝒐𝒕.zip',
+      contentType: 'application/zip'
     });
+
+    // Étape 5 : Nettoyage
+    fs.unlinkSync('./subscribers.json');
+    fs.unlinkSync('./referrals.json');
+    fs.unlinkSync('./pending.json');
+    fs.unlinkSync('./whitelist.json');
+    fs.unlinkSync(zipPath);
 
   } catch (err) {
-    console.error(err);
+    console.error('Erreur dans /backup :', err);
     bot.sendMessage(msg.chat.id, t(lang, 'error_occurred'));
   }
 });
@@ -407,7 +423,10 @@ bot.onText(/\/backup/, async (msg) => {
 bot.onText(/\/acces/, async (msg) => {
   const userId = String(msg.from.id);
   const chatId = msg.chat.id;
-  const lang = msg.from.language_code?.startsWith('en') ? 'en' : 'fr';
+
+  // 🔁 Détection de langue depuis la base ou fallback
+  const userLangData = await User.findOne({ userId });
+  const lang = userLangData?.lang || (msg.from.language_code?.startsWith('en') ? 'en' : 'fr');
 
   if (isAdmin(userId)) {
     return bot.sendMessage(chatId, `✅ ${t(lang, 'admin_access')}:\n${config.CHANNEL_LINK}`);
@@ -416,15 +435,20 @@ bot.onText(/\/acces/, async (msg) => {
   try {
     const user = await Subscriber.findOne({ userId });
 
+    // 🔒 Abonnement expiré ou inexistant
     if (!user || new Date(user.expires) < new Date()) {
-      return bot.sendMessage(chatId, `${t(lang, 'subscription_expired')}\n\n${t(lang, 'please_pay')} /abonnement\n${t(lang, 'send_proof')} /preuve`);
+      return bot.sendMessage(chatId,
+        `${t(lang, 'subscription_expired')}\n\n` +
+        `${t(lang, 'please_pay')} /abonnement\n` +
+        `${t(lang, 'send_proof')} /preuve`
+      );
     }
 
     const now = new Date();
     let invite = await Invite.findOne({ userId });
 
-    // 🔁 Si un lien encore valide existe
-    if (invite && invite.expiresAt && new Date(invite.expiresAt) > now) {
+    // 🔁 Si un lien encore valide existe, le renvoyer
+    if (invite && invite.expiresAt && invite.inviteLink && new Date(invite.expiresAt) > now) {
       return bot.sendMessage(chatId, `✅ ${t(lang, 'valid_invite')}\n${invite.inviteLink}`, {
         reply_markup: {
           inline_keyboard: [
@@ -439,8 +463,9 @@ bot.onText(/\/acces/, async (msg) => {
       });
     }
 
-    // 🆕 Sinon on crée un nouveau lien valable 1h
+    // ✅ Créer un nouveau lien
     const expireTimestamp = Math.floor(Date.now() / 1000) + 3600;
+
     const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
       member_limit: 1,
       creates_join_request: false,
@@ -462,7 +487,7 @@ bot.onText(/\/acces/, async (msg) => {
       }
     });
 
-    // 💾 Sauvegarde ou mise à jour de l’invitation
+    // 💾 Sauvegarde du lien
     await Invite.findOneAndUpdate(
       { userId },
       {
@@ -476,19 +501,19 @@ bot.onText(/\/acces/, async (msg) => {
     );
 
   } catch (err) {
-    console.error(err);
+    console.error('Erreur dans /acces:', err);
     bot.sendMessage(chatId, `❌ ${t(lang, 'error_occurred')}`);
   }
 });
 
 
 // === /valider <id> ===
+// === /valider ===
 bot.onText(/\/valider (\d+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
-  const userId = String(match[1]); // ID de l'utilisateur à valider
+  const userId = String(match[1]);
   const lang = await getUserLang(adminId, msg.from.language_code);
 
-  // Vérifie si l'émetteur est un admin
   if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
@@ -499,11 +524,9 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
       return bot.sendMessage(msg.chat.id, t(lang, 'no_pending'));
     }
 
-    // Ajoute 30 jours à la date actuelle
     const expiration = new Date();
     expiration.setDate(expiration.getDate() + 30);
 
-    // Enregistrement ou mise à jour dans la collection des abonnés
     await Subscriber.findOneAndUpdate(
       { userId },
       {
@@ -514,30 +537,31 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
       { upsert: true }
     );
 
-    // Supprime la demande en attente
     await Pending.deleteOne({ userId });
 
-    // Notifications
-    await bot.sendMessage(userId, t(lang, 'subscription_validated')); // message à l'utilisateur
-    await bot.sendMessage(msg.chat.id, `✅ Abonnement validé pour @${pending.username || userId} (ID: ${userId})`);
+    const userLang = await getUserLang(userId); // langue du bénéficiaire
+
+    await bot.sendMessage(userId, t(userLang, 'subscription_validated'));
+    await bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'subscription_validated_admin')} @${pending.username || userId} (ID: ${userId})`);
 
   } catch (err) {
     console.error('Erreur validation abonnement:', err);
-    await bot.sendMessage(msg.chat.id, t(lang, 'error_occurred'));
+    bot.sendMessage(msg.chat.id, t(lang, 'error_occurred'));
   }
 });
 
 // === /rejeter ===
+// === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
-  const lang = await getUserLang(adminId, msg.from.language_code); // langue de l’admin
+  const userId = String(match[1]);
+  const reason = match[2].trim();
+
+  const lang = await getUserLang(adminId, msg.from.language_code);
 
   if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
-
-  const userId = String(match[1]);
-  const reason = match[2].trim();
 
   try {
     const request = await Pending.findOne({ userId });
@@ -549,14 +573,12 @@ bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
 
     const userLang = await getUserLang(userId);
 
-    // Notifier l'utilisateur rejeté
     await bot.sendMessage(
       request.chatId,
       `❌ ${t(userLang, 'rejected_user')}\n📌 *${t(userLang, 'reason')}:* ${reason}`,
       { parse_mode: "Markdown" }
     );
 
-    // Notifier l’admin
     const username = request.username ? `@${request.username}` : `ID:${userId}`;
     await bot.sendMessage(
       msg.chat.id,
