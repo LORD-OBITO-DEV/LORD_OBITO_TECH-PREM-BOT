@@ -342,26 +342,18 @@ bot.onText(/\/preuve(?: (.+))?/, async (msg, match) => {
 });
 
 // === /lang ===
-bot.onText(/\/lang/, async (msg) => {
+bot.onText(/\/lang (fr|en)/, async (msg, match) => {
   const userId = String(msg.from.id);
-  const currentLang = await getUserLang(userId);
+  const lang = match[1];
 
-  const text = currentLang === 'fr'
-    ? '🌍 Choisis ta langue :'
-    : '🌍 Choose your language:';
+  await User.findOneAndUpdate(
+    { userId },
+    { userId, lang },
+    { upsert: true }
+  );
 
-  const keyboard = {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '🇫🇷 Français', callback_data: 'lang_fr' },
-          { text: '🇬🇧 English', callback_data: 'lang_en' }
-        ]
-      ]
-    }
-  };
-
-  bot.sendMessage(msg.chat.id, text, keyboard);
+  const confirmation = lang === 'fr' ? '✅ Langue mise à jour en *Français*' : '✅ Language updated to *English*';
+  bot.sendMessage(msg.chat.id, confirmation, { parse_mode: 'Markdown' });
 });
 
 // === /backup (réservé à l’admin) ===
@@ -558,6 +550,7 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
   }
 });
 
+// === /rejeter ===
 // === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
@@ -947,18 +940,16 @@ setInterval(async () => {
 // === Callback: bouton "J’ai rejoint la chaîne" + /lang
 bot.on('callback_query', async (query) => {
   const userId = String(query.from.id);
+  const lang = query.from.language_code || 'fr';
   const chatId = query.message.chat.id;
-  const data = query.data;
 
-  // Obtenir la langue actuelle depuis DB
-  const lang = await getUserLang(userId, query.from.language_code || 'fr');
-
-  // === 1️⃣ Bouton "J’ai rejoint la chaîne"
-  if (data === 'joined_channel') {
+  // 1️⃣ Callback pour le bouton "J’ai rejoint la chaîne"
+  if (query.data === 'joined_channel') {
     const invite = await Invite.findOne({ userId });
 
     if (invite && invite.chatId && invite.messageId) {
       try {
+        // Supprimer le message contenant le lien
         await bot.deleteMessage(invite.chatId, invite.messageId);
         await Invite.deleteOne({ userId });
 
@@ -982,32 +973,36 @@ bot.on('callback_query', async (query) => {
       });
     }
 
-    return;
+  // 2️⃣ Callback pour changer la langue
+  } else if (query.data.startsWith("lang_")) {
+    const newLang = query.data.split("_")[1];
+
+    try {
+      await User.findOneAndUpdate(
+        { userId },
+        { lang: newLang },
+        { upsert: true }
+      );
+
+      const confirmMsg = newLang === 'fr'
+        ? "✅ Langue définie sur *Français*."
+        : "✅ Language set to *English*.";
+
+      await bot.editMessageText(confirmMsg, {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: "Markdown"
+      });
+
+      await bot.answerCallbackQuery(query.id); // Ferme l'animation de chargement
+    } catch (err) {
+      console.error("❌ Erreur changement langue :", err.message);
+      await bot.answerCallbackQuery(query.id, {
+        text: t(lang, 'error_occurred'),
+        show_alert: true
+      });
+    }
   }
-
-  // === 2️⃣ Callback changement de langue
-  if (data === 'lang_fr' || data === 'lang_en') {
-    const selectedLang = data === 'lang_fr' ? 'fr' : 'en';
-
-    // Met à jour la langue en base
-    await setUserLang(userId, selectedLang);
-
-    const confirmMsg = selectedLang === 'fr'
-      ? '✅ Langue changée en *Français*.'
-      : '✅ Language changed to *English*.';
-
-    return bot.editMessageText(confirmMsg, {
-      chat_id: chatId,
-      message_id: query.message.message_id,
-      parse_mode: 'Markdown'
-    });
-  }
-
-  // Sinon, réponse générique
-  await bot.answerCallbackQuery(query.id, {
-    text: t(lang, 'invalid_command'),
-    show_alert: false
-  });
 });
 
 // === Webhook config ===
