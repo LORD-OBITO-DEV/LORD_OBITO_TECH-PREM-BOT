@@ -10,5 +10,5 @@
   "BOT_USERNAME": "LORD_OBITO_TECH_PREM_BOT",
   "CHANNEL_ID": "-1002856361614",
   "MONGO_URI": "mongodb+srv://LORD_OBITO_BOT:QWERTY304@cluster0.5dev5wf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
-  "OWNER_ID:" "6587556123"
+  "OWNER_ID": "6587556123"
 }
