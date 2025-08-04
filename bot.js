@@ -171,7 +171,8 @@ bot.onText(/\/help/, async (msg) => {
 
   let text = t(lang, 'help_base');
 
-  if (String(config.ADMIN_ID) === userId) {
+  // ✅ Vérifie si l'utilisateur est admin OU owner
+  if (await isAdmin(userId)) {
     text += '\n\n' + t(lang, 'help_admin');
   }
 
@@ -179,7 +180,6 @@ bot.onText(/\/help/, async (msg) => {
     parse_mode: "MarkdownV2"
   });
 });
-
 // === /codepromo ===
 bot.onText(/\/codepromo/, async (msg) => {
   const userId = String(msg.from.id);
