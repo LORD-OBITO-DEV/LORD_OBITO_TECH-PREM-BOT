@@ -267,24 +267,6 @@ bot.onText(/\/abonnement/, async (msg) => {
 });
 
 // Moyens de paiement
-bot.onText(/\/abonnement/, async (msg) => {
-  const userId = String(msg.from.id);
-  const lang = await getUserLang(userId, msg.from.language_code);
-
-  if (isAdmin(userId)) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'admin_no_payment_needed'));
-  }
-
-  const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
-  const message = t(lang, 'subscription_message');
-
-  bot.sendPhoto(msg.chat.id, imageURL, {
-    caption: message,
-    parse_mode: "Markdown"
-  });
-});
-
-// Moyens de paiement
 bot.onText(/\/paypal/, async (msg) => {
   const lang = await getUserLang(msg.from.id, msg.from.language_code);
   const text = t(lang, 'paypal_text').replace('{link}', config.PAYPAL_LINK);
