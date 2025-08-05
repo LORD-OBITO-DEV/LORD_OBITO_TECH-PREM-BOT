@@ -10,3 +10,6 @@ function getAdmins() {
 function saveAdmins(adminList) {
   fs.writeFileSync(adminsFile, JSON.stringify(adminList, null, 2));
 }
+
+// ✅ Export des fonctions
+export { getAdmins, saveAdmins };
