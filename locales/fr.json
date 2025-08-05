@@ -71,5 +71,7 @@
   "addadmin_success": "✅ L’utilisateur {id} a été ajouté comme admin.",
   "deladmin_success": "✅ L’admin {id} a été retiré.",
   "not_admin": "❌ Cet utilisateur n’est pas un admin.",
-  "admins_list": "👑 Admins actuels :\n{list}"
+  "admins_list": "👑 Admins actuels :\n{list}",
+  "already_admin": "ℹ️ L’utilisateur {id} est déjà administrateur.",
+  "owner_holy": "⛔ Seul le propriétaire peut ajouter ou retirer un administrateur."
 }
