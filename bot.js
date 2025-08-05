@@ -12,12 +12,6 @@ import mongoose from 'mongoose';
 import Invite from './models/Invite.js';
 import { t } from './i18n.js'; // importer la fonction t()
 import User from './models/User.js';
-import Admin from './models/Admin.js';
-
-// 🔐 Vérifie si un utilisateur est admin
-async function isAdmin(userId) {
-  return String(userId) === config.OWNER_ID || await Admin.exists({ userId });
-}
 
 function getLang(msg) {
   const langCode = msg.from?.language_code || 'fr';
@@ -62,6 +56,9 @@ mongoose.connect(mongoUri, {
 });
 
 // ✅ Fonction manquante ajoutée ici
+function isAdmin(userId) {
+  return String(userId) === String(config.ADMIN_ID);
+}
 
 const bot = new TelegramBot(config.BOT_TOKEN, { webHook: true });
 
@@ -171,8 +168,7 @@ bot.onText(/\/help/, async (msg) => {
 
   let text = t(lang, 'help_base');
 
-  // ✅ Vérifie si l'utilisateur est admin OU owner
-  if (await isAdmin(userId)) {
+  if (String(config.ADMIN_ID) === userId) {
     text += '\n\n' + t(lang, 'help_admin');
   }
 
@@ -180,6 +176,7 @@ bot.onText(/\/help/, async (msg) => {
     parse_mode: "MarkdownV2"
   });
 });
+
 // === /codepromo ===
 bot.onText(/\/codepromo/, async (msg) => {
   const userId = String(msg.from.id);
@@ -252,6 +249,24 @@ bot.onText(/\/abonnement/, async (msg) => {
   const userId = String(msg.from.id);
   const user = await User.findOne({ userId });
   const lang = user?.lang || msg.from.language_code || 'fr';
+
+  if (isAdmin(userId)) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'admin_no_payment_needed'));
+  }
+
+  const imageURL = 'https://files.catbox.moe/4m5nb4.jpg';
+  const message = t(lang, 'subscription_message');
+
+  bot.sendPhoto(msg.chat.id, imageURL, {
+    caption: message,
+    parse_mode: "Markdown"
+  });
+});
+
+// Moyens de paiement
+bot.onText(/\/abonnement/, async (msg) => {
+  const userId = String(msg.from.id);
+  const lang = await getUserLang(userId, msg.from.language_code);
 
   if (isAdmin(userId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_no_payment_needed'));
@@ -346,7 +361,7 @@ bot.onText(/\/backup/, async (msg) => {
   const userId = String(msg.from.id);
   const lang = msg.from.language_code || 'fr';
 
-  if (!await isAdmin(userId)) {
+  if (!isAdmin(userId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -409,7 +424,7 @@ bot.onText(/\/acces/, async (msg) => {
   const userId = String(msg.from.id);
   const chatId = msg.chat.id;
 
-  // 🔁 Langue depuis DB ou fallback
+  // 🔁 Détection de langue depuis la base ou fallback
   const userLangData = await User.findOne({ userId });
   const lang = userLangData?.lang || (msg.from.language_code?.startsWith('en') ? 'en' : 'fr');
 
@@ -420,7 +435,7 @@ bot.onText(/\/acces/, async (msg) => {
   try {
     const user = await Subscriber.findOne({ userId });
 
-    // ❌ Aucune souscription ou expirée
+    // 🔒 Abonnement expiré ou inexistant
     if (!user || new Date(user.expires) < new Date()) {
       return bot.sendMessage(chatId,
         `${t(lang, 'subscription_expired')}\n\n` +
@@ -429,17 +444,11 @@ bot.onText(/\/acces/, async (msg) => {
       );
     }
 
-    // 🔒 Vérifie si l’utilisateur est déjà dans la chaîne
-    const member = await bot.getChatMember(config.CHANNEL_ID, parseInt(userId));
-    if (["member", "administrator", "creator"].includes(member.status)) {
-      return bot.sendMessage(chatId, `✅ ${t(lang, 'access_granted')}`);
-    }
-
     const now = new Date();
-    const invite = await Invite.findOne({ userId });
+    let invite = await Invite.findOne({ userId });
 
-    // 🔁 Si un lien encore valide existe, on le renvoie
-    if (invite && invite.expiresAt && new Date(invite.expiresAt) > now) {
+    // 🔁 Si un lien encore valide existe, le renvoyer
+    if (invite && invite.expiresAt && invite.inviteLink && new Date(invite.expiresAt) > now) {
       return bot.sendMessage(chatId, `✅ ${t(lang, 'valid_invite')}\n${invite.inviteLink}`, {
         reply_markup: {
           inline_keyboard: [
@@ -454,13 +463,9 @@ bot.onText(/\/acces/, async (msg) => {
       });
     }
 
-    // ❌ Si un lien a déjà été généré mais expiré → ne PAS en régénérer
-    if (invite && invite.expiresAt && new Date(invite.expiresAt) <= now) {
-      return bot.sendMessage(chatId, `❌ ${t(lang, 'subscription_expired')} (${t(lang, 'link_deleted')})`);
-    }
-
-    // ✅ Sinon, créer un nouveau lien une seule fois
+    // ✅ Créer un nouveau lien
     const expireTimestamp = Math.floor(Date.now() / 1000) + 3600;
+
     const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
       member_limit: 1,
       creates_join_request: false,
@@ -482,7 +487,7 @@ bot.onText(/\/acces/, async (msg) => {
       }
     });
 
-    // 💾 Enregistrer le lien d’invitation
+    // 💾 Sauvegarde du lien
     await Invite.findOneAndUpdate(
       { userId },
       {
@@ -496,19 +501,20 @@ bot.onText(/\/acces/, async (msg) => {
     );
 
   } catch (err) {
-    console.error('Erreur /acces:', err);
+    console.error('Erreur dans /acces:', err);
     bot.sendMessage(chatId, `❌ ${t(lang, 'error_occurred')}`);
   }
 });
 
 
 // === /valider <id> ===
+// === /valider ===
 bot.onText(/\/valider (\d+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
   const userId = String(match[1]);
   const lang = await getUserLang(adminId, msg.from.language_code);
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -545,6 +551,7 @@ bot.onText(/\/valider (\d+)/, async (msg, match) => {
 });
 
 // === /rejeter ===
+// === /rejeter ===
 bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
   const userId = String(match[1]);
@@ -552,7 +559,7 @@ bot.onText(/\/rejeter (\d+) (.+)/, async (msg, match) => {
 
   const lang = await getUserLang(adminId, msg.from.language_code);
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -614,90 +621,26 @@ bot.onText(/\/status/, async (msg) => {
 bot.onText(/\/prem (\d+)/, async (msg, match) => {
   const adminId = String(msg.from.id);
   const lang = await getUserLang(adminId, msg.from.language_code);
-  const userId = String(match[1]);
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
-  try {
-    const ref = await Referral.findOne({ userId });
-    const username = ref?.username || `ID:${userId}`;
-    const expires = getExpirationDate(30); // +30 jours
+  const userId = String(match[1]);
+  const ref = await Referral.findOne({ userId });
+  const username = ref?.username || `ID:${userId}`;
+  const expires = getExpirationDate(30); // +30 jours
 
-    // 📌 Mise à jour/ajout du premium
-    await Subscriber.findOneAndUpdate(
-      { userId },
-      { username, expires },
-      { upsert: true, new: true }
-    );
+  await Subscriber.findOneAndUpdate(
+    { userId },
+    { username, expires },
+    { upsert: true, new: true }
+  );
 
-    const userLang = await getUserLang(userId);
+  const userLang = await getUserLang(userId);
 
-    // 👀 Est-ce que l'utilisateur est déjà dans la chaîne ?
-    try {
-      const member = await bot.getChatMember(config.CHANNEL_ID, parseInt(userId));
-      if (["member", "administrator", "creator"].includes(member.status)) {
-        await bot.sendMessage(userId, t(userLang, 'prem_user'));
-        return bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'prem_admin')} ${username}`);
-      }
-    } catch (e) {
-      // S'il n'est pas dans le canal, on vérifie le lien
-    }
-
-    const now = new Date();
-    const invite = await Invite.findOne({ userId });
-
-    // 🔁 Si lien encore valide, on le renvoie
-    if (invite && invite.expiresAt && new Date(invite.expiresAt) > now) {
-      await bot.sendMessage(userId, `${t(userLang, 'new_invite')}\n${invite.inviteLink}`, {
-        reply_markup: {
-          inline_keyboard: [[{ text: `✅ ${t(userLang, 'joined_button')}`, callback_data: "joined_channel" }]]
-        }
-      });
-      return bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'prem_admin')} ${username}`);
-    }
-
-    // ❌ S'il a déjà eu un lien mais expiré → ne PAS en régénérer
-    if (invite && invite.expiresAt && new Date(invite.expiresAt) <= now) {
-      await bot.sendMessage(msg.chat.id, `⚠️ ${username} a déjà eu un lien expiré. Il doit demander l’accès manuellement.`);
-      return;
-    }
-
-    // ✅ Générer un nouveau lien si nécessaire
-    const expireTimestamp = Math.floor(Date.now() / 1000) + 3600;
-    const inviteLinkData = await bot.createChatInviteLink(config.CHANNEL_ID, {
-      member_limit: 1,
-      creates_join_request: false,
-      expire_date: expireTimestamp
-    });
-
-    const inviteLink = inviteLinkData.invite_link;
-
-    await bot.sendMessage(userId, `${t(userLang, 'new_invite')}\n${inviteLink}`, {
-      reply_markup: {
-        inline_keyboard: [[{ text: `✅ ${t(userLang, 'joined_button')}`, callback_data: "joined_channel" }]]
-      }
-    });
-
-    const sent = await bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'prem_admin')} ${username}`);
-
-    await Invite.findOneAndUpdate(
-      { userId },
-      {
-        userId,
-        inviteLink,
-        messageId: sent.message_id,
-        chatId: msg.chat.id,
-        expiresAt: new Date(Date.now() + 3600 * 1000)
-      },
-      { upsert: true }
-    );
-
-  } catch (err) {
-    console.error('Erreur /prem :', err);
-    bot.sendMessage(msg.chat.id, `❌ ${t(lang, 'error_occurred')}`);
-  }
+  await bot.sendMessage(userId, t(userLang, 'prem_user'));
+  await bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'prem_admin')} ${username}`);
 });
 
 // === /unprem ===
@@ -706,7 +649,7 @@ bot.onText(/\/unprem (\d+)/, async (msg, match) => {
   const userId = String(match[1]);
   const lang = await getUserLang(adminId, msg.from.language_code);
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -736,7 +679,7 @@ bot.onText(/\/abonnes/, async (msg) => {
   const adminId = String(msg.from.id);
   const lang = await getUserLang(adminId, msg.from.language_code);
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -763,7 +706,7 @@ bot.onText(/\/whitelist (\d+)/, async (msg, match) => {
   const lang = await getUserLang(adminId, msg.from.language_code);
   const targetId = match[1];
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -773,74 +716,12 @@ bot.onText(/\/whitelist (\d+)/, async (msg, match) => {
   }
 
   try {
-    // 👀 Vérifie si l'utilisateur est déjà dans la chaîne
-    try {
-      const member = await bot.getChatMember(config.CHANNEL_ID, parseInt(targetId));
-      if (["member", "administrator", "creator"].includes(member.status)) {
-        await Whitelist.create({ userId: targetId });
-
-        await Subscriber.findOneAndUpdate(
-          { userId: targetId },
-          {
-            userId: targetId,
-            expires: new Date('9999-12-31'),
-            inviteLink: null
-          },
-          { upsert: true }
-        );
-
-        return bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'whitelisted_success').replace('{id}', targetId)}`);
-      }
-    } catch (e) {
-      // S’il n’est pas dans le canal, continuer
-    }
-
-    const now = new Date();
-    const existingInvite = await Invite.findOne({ userId: targetId });
-
-    // 🔁 Si lien actif déjà existant
-    if (existingInvite && existingInvite.expiresAt && new Date(existingInvite.expiresAt) > now) {
-      await Whitelist.create({ userId: targetId });
-
-      await Subscriber.findOneAndUpdate(
-        { userId: targetId },
-        {
-          userId: targetId,
-          expires: new Date('9999-12-31'),
-          inviteLink: existingInvite.inviteLink
-        },
-        { upsert: true }
-      );
-
-      const userLang = await getUserLang(targetId);
-      await bot.sendMessage(targetId, t(userLang, 'whitelist_user_notify').replace('{link}', existingInvite.inviteLink));
-
-      return bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'whitelisted_success').replace('{id}', targetId)}`);
-    }
-
-    // ❌ Si un lien expiré existe, ne pas recréer un lien
-    if (existingInvite && new Date(existingInvite.expiresAt) <= now) {
-      return bot.sendMessage(msg.chat.id, `⚠️ Le lien pour ${targetId} a expiré. Aucun nouveau lien ne sera généré.`);
-    }
-
-    // ✅ Créer un nouveau lien temporaire
-    const expireTimestamp = Math.floor(Date.now() / 1000) + 3600;
+    // Crée un lien temporaire (1h)
     const invite = await bot.createChatInviteLink(config.CHANNEL_ID, {
       member_limit: 1,
-      expire_date: expireTimestamp
+      expire_date: Math.floor(Date.now() / 1000) + 3600
     });
 
-    const inviteLink = invite.invite_link;
-
-    const sent = await bot.sendMessage(targetId, t(await getUserLang(targetId), 'whitelist_user_notify').replace('{link}', inviteLink), {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: `✅ ${t(lang, 'joined_button')}`, callback_data: 'joined_channel' }]
-        ]
-      }
-    });
-
-    // 💾 Enregistrement dans Whitelist, Invite & Subscriber
     await Whitelist.create({ userId: targetId });
 
     await Subscriber.findOneAndUpdate(
@@ -848,25 +729,14 @@ bot.onText(/\/whitelist (\d+)/, async (msg, match) => {
       {
         userId: targetId,
         expires: new Date('9999-12-31'),
-        inviteLink
-      },
-      { upsert: true }
-    );
-
-    await Invite.findOneAndUpdate(
-      { userId: targetId },
-      {
-        userId: targetId,
-        inviteLink,
-        messageId: sent.message_id,
-        chatId: targetId,
-        expiresAt: new Date(Date.now() + 3600 * 1000)
+        inviteLink: invite.invite_link
       },
       { upsert: true }
     );
 
     await bot.sendMessage(msg.chat.id, `✅ ${t(lang, 'whitelisted_success').replace('{id}', targetId)}`);
-    
+    const userLang = await getUserLang(targetId);
+    await bot.sendMessage(targetId, t(userLang, 'whitelist_user_notify').replace('{link}', invite.invite_link));
   } catch (err) {
     console.error('Erreur /whitelist :', err.message);
     bot.sendMessage(msg.chat.id, t(lang, 'error_occurred'));
@@ -880,7 +750,7 @@ bot.onText(/\/unwhitelist (\d+)/, async (msg, match) => {
   const lang = await getUserLang(adminId, msg.from.language_code);
   const targetId = match[1];
 
-  if (!await isAdmin(adminId)) {
+  if (!isAdmin(adminId)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -912,7 +782,7 @@ bot.onText(/\/unwhitelist (\d+)/, async (msg, match) => {
 bot.onText(/\/whitelist_liste/, async (msg) => {
   const lang = await getUserLang(msg.from.id, msg.from.language_code);
 
-  if (!await isAdmin(msg.from.id)) {
+  if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -930,7 +800,7 @@ bot.onText(/\/whitelist_liste/, async (msg) => {
 bot.onText(/\/stats/, async (msg) => {
   const lang = await getUserLang(msg.from.id, msg.from.language_code);
 
-  if (!await isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
+  if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
 
   const [totalSubs, totalRef, totalPending] = await Promise.all([
     Subscriber.countDocuments(),
@@ -969,66 +839,11 @@ bot.onText(/\/infos/, async (msg) => {
   bot.sendMessage(msg.chat.id, infos, { parse_mode: 'Markdown' });
 });
 
-//=== addadmin ===
-bot.onText(/\/addadmin (\d+)/, async (msg, match) => {
-  const senderId = String(msg.from.id);
-  const newAdminId = match[1];
-  const lang = await getUserLang(senderId);
-
-  if (senderId !== config.ADMIN_ID) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'owner_holy'));
-  }
-
-  const exists = await Admin.findOne({ userId: newAdminId });
-  if (exists) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'already_admin').replace('{id}', newAdminId));
-  }
-
-  await Admin.create({ userId: newAdminId });
-  bot.sendMessage(msg.chat.id, t(lang, 'addadmin_success').replace('{id}', newAdminId));
-});
-
-// === deladmin ===
-bot.onText(/\/deladmin (\d+)/, async (msg, match) => {
-  const senderId = String(msg.from.id);
-  const targetId = match[1];
-  const lang = await getUserLang(senderId);
-
-  if (senderId !== config.ADMIN_ID) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'owner_holy'));
-  }
-
-  const admin = await Admin.findOneAndDelete({ userId: targetId });
-
-  if (!admin) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'not_admin'));
-  }
-
-  bot.sendMessage(msg.chat.id, t(lang, 'deladmin_success').replace('{id}', targetId));
-});
-
-// === admin ===
-bot.onText(/\/admins/, async (msg) => {
-  const userId = String(msg.from.id);
-  const lang = await getUserLang(userId);
-
-  const admins = await Admin.find({});
-  let list = `• ${config.ADMIN_ID} (OWNER)\n`;
-
-  for (const admin of admins) {
-    if (admin.userId !== config.ADMIN_ID) {
-      list += `• ${admin.userId}\n`;
-    }
-  }
-
-  bot.sendMessage(msg.chat.id, t(lang, 'admins_list').replace('{list}', list));
-});
-
 // === /nettoie_liens ===
 bot.onText(/\/nettoie_liens/, async (msg) => {
   const lang = await getUserLang(msg.from.id, msg.from.language_code);
 
-  if (!await isAdmin(msg.from.id)) {
+  if (!isAdmin(msg.from.id)) {
     return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
   }
 
@@ -1128,47 +943,38 @@ bot.on('callback_query', async (query) => {
   const lang = query.from.language_code || 'fr';
   const chatId = query.message.chat.id;
 
-  // 1️⃣ Callback : "J’ai rejoint la chaîne"
+  // 1️⃣ Callback pour le bouton "J’ai rejoint la chaîne"
   if (query.data === 'joined_channel') {
     const invite = await Invite.findOne({ userId });
 
-    try {
-      // 🔒 Vérifie s’il est dans la chaîne
-      const status = await bot.getChatMember(config.CHANNEL_ID, parseInt(userId));
-      const isMember = ["member", "administrator", "creator"].includes(status.status);
+    if (invite && invite.chatId && invite.messageId) {
+      try {
+        // Supprimer le message contenant le lien
+        await bot.deleteMessage(invite.chatId, invite.messageId);
+        await Invite.deleteOne({ userId });
 
-      if (!isMember) {
-        return await bot.answerCallbackQuery(query.id, {
-          text: lang === 'fr'
-            ? "❌ Tu n’as pas encore rejoint la chaîne."
-            : "❌ You haven’t joined the channel yet.",
+        await bot.answerCallbackQuery(query.id, {
+          text: t(lang, 'link_deleted'),
+          show_alert: false
+        });
+
+        await bot.sendMessage(userId, t(lang, 'joined_success'));
+      } catch (err) {
+        console.error(`❌ Erreur suppression message : ${err.message}`);
+        await bot.answerCallbackQuery(query.id, {
+          text: t(lang, 'error_occurred'),
           show_alert: true
         });
       }
-
-      if (invite && invite.chatId && invite.messageId) {
-        await bot.deleteMessage(invite.chatId, invite.messageId);
-        await Invite.deleteOne({ userId });
-      }
-
+    } else {
       await bot.answerCallbackQuery(query.id, {
-        text: t(lang, 'link_deleted'),
-        show_alert: false
-      });
-
-      await bot.sendMessage(userId, t(lang, 'joined_success'));
-
-    } catch (err) {
-      console.error(`❌ Erreur dans joined_channel : ${err.message}`);
-      await bot.answerCallbackQuery(query.id, {
-        text: t(lang, 'error_occurred'),
+        text: t(lang, 'no_pending'),
         show_alert: true
       });
     }
-  }
 
-  // 2️⃣ Callback pour changement de langue
-  else if (query.data.startsWith("lang_")) {
+  // 2️⃣ Callback pour changer la langue
+  } else if (query.data.startsWith("lang_")) {
     const newLang = query.data.split("_")[1];
 
     try {
@@ -1188,7 +994,7 @@ bot.on('callback_query', async (query) => {
         parse_mode: "Markdown"
       });
 
-      await bot.answerCallbackQuery(query.id); // Ferme le "loading"
+      await bot.answerCallbackQuery(query.id); // Ferme l'animation de chargement
     } catch (err) {
       console.error("❌ Erreur changement langue :", err.message);
       await bot.answerCallbackQuery(query.id, {
