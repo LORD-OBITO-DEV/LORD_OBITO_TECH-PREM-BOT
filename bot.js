@@ -971,64 +971,57 @@ bot.onText(/\/infos/, async (msg) => {
 
 //=== addadmin ===
 bot.onText(/\/addadmin (\d+)/, async (msg, match) => {
-  const ownerId = String(msg.from.id);
-  const lang = await getUserLang(ownerId, msg.from.language_code);
-  const targetId = match[1];
+  const senderId = String(msg.from.id);
+  const newAdminId = match[1];
+  const lang = await getUserLang(senderId);
 
-  if (ownerId !== config.OWNER_ID) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'owner_only'));
+  if (senderId !== config.ADMIN_ID) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'owner_holy'));
   }
 
-  const exists = await Admin.exists({ userId: targetId });
+  const exists = await Admin.findOne({ userId: newAdminId });
   if (exists) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'already_admin').replace('{id}', targetId));
+    return bot.sendMessage(msg.chat.id, t(lang, 'already_admin').replace('{id}', newAdminId));
   }
 
-  await Admin.create({ userId: targetId });
-  bot.sendMessage(msg.chat.id, t(lang, 'admin_added').replace('{id}', targetId));
+  await Admin.create({ userId: newAdminId });
+  bot.sendMessage(msg.chat.id, t(lang, 'addadmin_success').replace('{id}', newAdminId));
 });
 
 // === deladmin ===
-bot.onText(/\/deladmin (.+)/, async (msg, match) => {
-  const userId = String(msg.from.id);
-  const targetId = match[1].trim();
+bot.onText(/\/deladmin (\d+)/, async (msg, match) => {
+  const senderId = String(msg.from.id);
+  const targetId = match[1];
+  const lang = await getUserLang(senderId);
 
-  if (!isAdmin(userId)) {
-    return bot.sendMessage(msg.chat.id, t(await getUserLang(userId, msg.from.language_code), "admin_only"));
+  if (senderId !== config.ADMIN_ID) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'owner_holy'));
   }
 
-  let admins = getAdmins();
-  if (!admins.includes(targetId)) {
-    return bot.sendMessage(msg.chat.id, t(await getUserLang(userId, msg.from.language_code), "not_admin"));
+  const admin = await Admin.findOneAndDelete({ userId: targetId });
+
+  if (!admin) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'not_admin'));
   }
 
-  admins = admins.filter(id => id !== targetId);
-  saveAdmins(admins);
-
-  bot.sendMessage(msg.chat.id, t(await getUserLang(userId, msg.from.language_code), "admin_removed"));
+  bot.sendMessage(msg.chat.id, t(lang, 'deladmin_success').replace('{id}', targetId));
 });
 
 // === admin ===
 bot.onText(/\/admins/, async (msg) => {
   const userId = String(msg.from.id);
-  const lang = await getUserLang(userId, msg.from.language_code);
-
-  if (!await isAdmin(userId)) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'admin_only'));
-  }
+  const lang = await getUserLang(userId);
 
   const admins = await Admin.find({});
-  const count = admins.length;
+  let list = `• ${config.ADMIN_ID} (OWNER)\n`;
 
-  if (count === 0) {
-    return bot.sendMessage(msg.chat.id, t(lang, 'no_admins'));
+  for (const admin of admins) {
+    if (admin.userId !== config.ADMIN_ID) {
+      list += `• ${admin.userId}\n`;
+    }
   }
 
-  const list = admins.map((a, i) => `👤 ${i + 1}. ID: \`${a.userId}\``).join('\n');
-
-  const response = `👮‍♂️ *${t(lang, 'admin_list')}* (${count}):\n\n${list}\n\n👑 *OWNER:* \`${config.OWNER_ID}\``;
-
-  bot.sendMessage(msg.chat.id, response, { parse_mode: 'Markdown' });
+  bot.sendMessage(msg.chat.id, t(lang, 'admins_list').replace('{list}', list));
 });
 
 // === /nettoie_liens ===
