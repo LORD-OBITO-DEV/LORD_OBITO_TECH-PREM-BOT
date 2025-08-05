@@ -1,12 +1,12 @@
-// models/Admin.js
-import mongoose from 'mongoose';
+import fs from 'fs';
 
-const AdminSchema = new mongoose.Schema({
-  userId: {
-    type: String,
-    required: true,
-    unique: true
-  }
-});
+const adminsFile = './admins.json';
 
-export default mongoose.model('Admin', AdminSchema);
+function getAdmins() {
+  const data = fs.readFileSync(adminsFile, 'utf8');
+  return JSON.parse(data);
+}
+
+function saveAdmins(adminList) {
+  fs.writeFileSync(adminsFile, JSON.stringify(adminList, null, 2));
+}
