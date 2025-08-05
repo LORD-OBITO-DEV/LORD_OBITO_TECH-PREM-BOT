@@ -12,7 +12,7 @@ import mongoose from 'mongoose';
 import Invite from './models/Invite.js';
 import { t } from './i18n.js'; // importer la fonction t()
 import User from './models/User.js';
-import { getAdmins, saveAdmins } from './models/Admin.js';
+import Admin from './models/Admin.js';
 
 // 🔐 Vérifie si un utilisateur est admin
 async function isAdmin(userId) {
